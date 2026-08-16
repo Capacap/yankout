@@ -1,0 +1,7 @@
+// clipdrag window rule for niri. A Wayland xdg toplevel cannot position
+// itself, so floating and placing the puck is the compositor's job —
+// merge this into ~/.config/niri/config.kdl and adjust to taste.
+window-rule {
+    match app-id=r#"^dev\.clipdrag$"#
+    open-floating true
+}

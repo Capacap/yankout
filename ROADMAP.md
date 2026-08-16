@@ -19,6 +19,13 @@ Cargo project, GTK4 window, two throwaway experiments:
   mechanism in the design, so it gets prototyped before anything is
   built on it.
 
+Outcome (16 August 2026): done, both spikes pass by hand. String and
+union file-path drags land in real targets; the capture-phase handle
+coexists with clicks and drags the pressed row. Finding:
+`single_click_activate` implies select-on-hover, which would let the
+pointer steal the keyboard's selection — so list mode drops that mode
+and recall becomes Enter/double-click (folded into DESIGN.md and M4).
+
 ## M1 — Classification core
 
 Pure `interpret(content) -> payload` module implementing the drag-time
@@ -55,9 +62,10 @@ retire ripdrag. First shipped value.
 ## M4 — List mode
 
 ListView over the backend: keyboard navigation, filter-as-you-type,
-Enter-to-recall, the capture-phase whole-window drag handle with
-row-press-selects-first, close on Esc and focus loss, "history empty"
-row. Daily-drivable picker.
+click-to-select with Enter/double-click recall (no
+single-click-activate; its select-on-hover steals keyboard selection —
+M0 finding), the capture-phase whole-window drag handle, close on Esc
+and focus loss, "history empty" row. Daily-drivable picker.
 
 ## M5 — Fit and finish
 

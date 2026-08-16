@@ -66,18 +66,22 @@ first. Two verbs per row:
   the window closes after a successful drop (drop success is observable
   from the source side: `drag-end` fires on success, `drag-cancel`
   first on failure).
-- Enter (or click): the entry is promoted back to the active clipboard,
-  the standard clipboard-manager recall action.
+- Enter (or double-click): the entry is promoted back to the active
+  clipboard, the standard clipboard-manager recall action. A single
+  click only selects.
 
 The drag target is not the row. Keyboard owns selection, and the whole
 window is the drag handle for whatever entry is selected: filter to the
 entry with hands on the keyboard, then grab anywhere on the window from
 wherever the pointer happens to be and pull. No precise pointing at a
-20-pixel row. One disambiguation rule keeps mouse use coherent:
-pressing on a row selects it before anything else, so a drag that
-starts on a row drags that row, and a press-release on a row is a
-recall of that row. There are no per-row drag sources; the window-level
-handle (capture phase, see Stack) is the only one.
+20-pixel row. Selection moves only by keyboard or an explicit click on
+a row — the list deliberately avoids GTK's single-click-activate mode,
+whose select-on-hover (an M0 finding) would let the pointer steal the
+keyboard's selection on its way to grabbing the window. A press on a
+row selects that row before the drag threshold is crossed, so a drag
+that starts on a row drags that row. There are no per-row drag
+sources; the window-level handle (capture phase, see Stack) is the
+only one.
 
 Empty history shows the window with a "history empty" row rather than
 failing; a missing or broken backend is a clear error on stderr and a
@@ -215,9 +219,11 @@ ListView claims the press and a window-level source never fires. Its
 content provider is returned from the `prepare` signal (by `drag-begin`
 the offered formats are already locked), built lazily from the
 currently selected entry so decoding only runs for the entry actually
-dragged. How cleanly a capture-phase claim coexists with
-click-to-recall on the rows is the single riskiest mechanism in the
-design and the first thing to prototype.
+dragged. The capture-phase claim was the design's riskiest mechanism;
+the M0 spike validated it — clean clicks reach the list, press-and-pull
+starts a drag. The same spike showed that GTK's single-click-activate
+implies select-on-hover, which is why recall is Enter/double-click
+rather than single click and the list does not use that mode.
 
 Classification and payload assembly stay plain Rust producing MIME-type
 to bytes mappings (`text/uri-list` built by hand); the GTK content

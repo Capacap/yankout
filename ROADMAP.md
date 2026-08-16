@@ -9,40 +9,61 @@ whole-window drag handle then reuses the puck's drag code.
 
 ## M0 — Spike
 
-Cargo project, GTK4 window, drag one hardcoded string and one hardcoded
-file path out to a browser and a file manager. Proves the toolchain and
-the drag path on this machine. Throwaway code allowed.
+Cargo project, GTK4 window, two throwaway experiments:
+
+- Drag one hardcoded string and one hardcoded file path out to a
+  browser and a file manager. Proves the toolchain and the drag path.
+- A capture-phase window-level GtkDragSource over a
+  `single_click_activate` ListView — the click/drag disambiguation
+  that the whole-window handle depends on is the least certain
+  mechanism in the design, so it gets prototyped before anything is
+  built on it.
 
 ## M1 — Classification core
 
-Pure `interpret(entry) -> payload` module implementing the drag-time
-rules from DESIGN.md, plus payload-to-ContentProvider construction.
-Fully unit-tested: tempfiles for path-existence cases, in-process
-provider interrogation for MIME output. The heart of the program,
-finished before any real UI.
+Pure `interpret(content) -> payload` module implementing the drag-time
+rules from DESIGN.md, where a payload is a plain MIME-type-to-bytes
+mapping (`text/uri-list` assembled by hand, image types sniffed from
+magic bytes). No GTK types here — the GdkContentProvider is a thin
+byte-backed adapter built later, which keeps this module fully
+unit-testable without a display: tempfiles for path-existence cases,
+byte-level assertions on the produced payloads.
 
-## M2 — cliphist backend
+## M2 — Data sources
 
-The backend trait, `cliphist list` parsing, `decode` on demand, and a
-head-of-clipboard accessor for the puck. Integration-tested against a
-scratch database via cliphist's `-db-path` flag; an in-memory fake
-serves everything downstream.
+The history backend trait — list and decode only — with the cliphist
+implementation: parse `cliphist list` for display rows, `cliphist
+decode <id>` (id as argv; stdin is fragile about trailing newlines)
+for content. Separately, the puck's live-clipboard read via `wl-paste`
+— deliberately not on the trait, because history is fed by a watcher
+and reading history for the puck races its ingest.
+
+Integration-tested against a scratch database via cliphist's
+`-db-path` flag; an in-memory fake serves everything downstream. Exit
+criteria include the failure cases: absent or broken cliphist is a
+clear stderr error and nonzero exit, empty history is a well-defined
+result, empty clipboard is a puck error.
 
 ## M3 — Puck mode
 
-`--current` window built on M1+M2. Exit on drop or Esc. Switch the yazi
-binding, retire ripdrag. First shipped value.
+`--current` window built on M1+M2: whole surface drags the live
+clipboard, exit on drop or Esc, immune to focus loss. Ships with the
+niri window-rule that floats and places it — placement is
+compositor-side and is most of the puck's UX. Switch the yazi binding,
+retire ripdrag. First shipped value.
 
 ## M4 — List mode
 
 ListView over the backend: keyboard navigation, filter-as-you-type,
-Enter-to-recall, whole-window drag handle, close on Esc.
-Daily-drivable picker.
+Enter-to-recall, the capture-phase whole-window drag handle with
+row-press-selects-first, close on Esc and focus loss, "history empty"
+row. Daily-drivable picker.
 
 ## M5 — Fit and finish
 
-`--css` plus the neutral default theme, niri window rule, per-row type
-markers, the focus-loss-close decision, and a name decision before
+`--css` plus the neutral default theme, documented window rules, the
+per-row type-marker decision (markers need full decode of visible
+rows — see DESIGN.md open questions), and a name decision before
 anything gets published.
 
 ## M6 — Later
@@ -54,19 +75,23 @@ regressions ever justify it.
 
 The hard parts need neither a clipboard nor a drag:
 
-- Classification is a pure function; unit tests with tempfiles.
-- A GdkContentProvider can be interrogated in-process — build it,
-  request `text/uri-list` bytes, assert — no pointer, no drop target,
-  no compositor.
+- Classification is a pure function over decoded content; unit tests
+  with tempfiles.
+- Payloads are plain MIME-to-bytes maps assembled by our own code, so
+  the interesting assertions (uri-list escaping, multi-file lists,
+  sniffed image types) are byte comparisons needing no GTK at all. The
+  byte-backed GdkContentProvider adapter is thin enough that its
+  in-process interrogation is a smoke test, not a load-bearing one.
 - The backend reads a cliphist database, never the live clipboard;
   `-db-path` pointed at a scratch file isolates integration tests
   completely.
 
 What remains on the far side of the provider is GTK's DnD wire code,
-not ours: manual smoke testing on niri covers it. The one clipboard
-write (Enter-to-recall, a `wl-copy` invocation) is likewise smoke-test
-territory. If automation is ever wanted, the known rig is a headless
-wlroots compositor, virtual-pointer synthesis, and a ~50-line drop-sink
-app that prints what it receives — the drop-sink is worth building
-regardless as a manual test target showing which MIME type a drop
-delivered.
+not ours: manual smoke testing on niri covers it, keyed off the
+observable `drag-end` / `drag-cancel` signals. The clipboard touchpoints
+(Enter-to-recall via `wl-copy`, puck read via `wl-paste`) are thin
+subprocess calls, likewise smoke-test territory. If automation is ever
+wanted, the known rig is a headless wlroots compositor, virtual-pointer
+synthesis, and a ~50-line drop-sink app that prints what it receives —
+the drop-sink is worth building regardless as a manual test target
+showing which MIME type a drop delivered.

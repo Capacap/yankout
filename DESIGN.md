@@ -44,7 +44,8 @@ complaint: dmenu, rofi, wofi, fuzzel. Toolkit programs all, but they
 follow the launcher contract and so read as extensions of the keyboard
 rather than as apps. clipdrag adopts that contract wholesale:
 
-- Spawned by keybind, ephemeral, gone on Esc or focus loss.
+- Spawned by keybind, ephemeral, gone on Esc; list mode also closes on
+  focus loss. The puck is exempt from focus-loss close — see below.
 - Keyboard-driven end to end: arrows or j/k to move, type to filter,
   Enter to act.
 - Flat, monospace-friendly styling that themes to match the terminal
@@ -62,7 +63,9 @@ Launch shows a small window listing recent history entries, newest
 first. Two verbs per row:
 
 - Drag: the entry leaves as a drag, interpreted as described below, and
-  the window closes after a successful drop.
+  the window closes after a successful drop (drop success is observable
+  from the source side: `drag-end` fires on success, `drag-cancel`
+  first on failure).
 - Enter (or click): the entry is promoted back to the active clipboard,
   the standard clipboard-manager recall action.
 
@@ -70,8 +73,15 @@ The drag target is not the row. Keyboard owns selection, and the whole
 window is the drag handle for whatever entry is selected: filter to the
 entry with hands on the keyboard, then grab anywhere on the window from
 wherever the pointer happens to be and pull. No precise pointing at a
-20-pixel row. Dragging a specific row directly still works for
-mouse-first users.
+20-pixel row. One disambiguation rule keeps mouse use coherent:
+pressing on a row selects it before anything else, so a drag that
+starts on a row drags that row, and a press-release on a row is a
+recall of that row. There are no per-row drag sources; the window-level
+handle (capture phase, see Stack) is the only one.
+
+Empty history shows the window with a "history empty" row rather than
+failing; a missing or broken backend is a clear error on stderr and a
+nonzero exit.
 
 Deployments that already have a paste picker can treat the window as
 drag-only and keep using their picker; nothing in the design requires
@@ -80,37 +90,62 @@ this program to be the only recall path.
 ### Puck mode
 
 `clipdrag --current` (flag name open) shows no list at all: a
-postage-stamp window whose entire surface drags the *current clipboard
-head*, interpreted by the same drag-time rules, exiting on drop or Esc.
-Selection happens wherever it already happened — the terminal:
+postage-stamp window whose entire surface drags the *live clipboard* —
+read directly (`wl-paste` or equivalent), not through the history
+backend, because history is fed by a watcher and `wl-copy && clipdrag
+--current` would race its ingest. Same drag-time rules, exit on drop or
+Esc. Selection happens wherever it already happened — the terminal:
 
     # raw bash grows drag support
     echo ~/report.pdf | wl-copy && clipdrag --current
 
     # yazi: yank already writes the clipboard; one key spawns the puck
 
+The puck must survive focus loss: the working rhythm is spawn puck,
+click into the target application to scroll its drop zone into view,
+then come back and drag. Focus-loss close would kill the puck
+mid-workflow, so only Esc and a completed drop end it. An empty
+clipboard is an error and a nonzero exit, not an empty puck.
+
+A Wayland xdg toplevel cannot position itself, so where the puck
+appears is entirely the compositor's decision. That is most of the
+puck's UX; the first deployment ships the niri window-rule that floats
+and places it, and the README should say plainly that a placement rule
+is part of installing the tool.
+
 The terminal keeps everything terminal users care about — browsing,
 searching, scripting, composability — and the GUI degenerates to the
 irreducible minimum, a gesture surface.
 
-Architecturally the puck is nearly free: both modes share the backend,
-the drag-time interpretation and the content-provider code. The puck is
-the list window with one implicit entry and no list.
+Architecturally the puck is nearly free: both modes share the
+drag-time interpretation and the content-provider code. The puck is
+the list window with one implicit entry, no list, and a different
+close policy.
 
 ## Drag-time interpretation
 
 The core design point. History stores content as text or binary; what a
-drop target needs depends on what the entry *is*, and that is decided at
-drag time, not at store time:
+drop target needs depends on what the entry *is*, and that is decided
+at drag time, not at store time. Classification always runs on the
+full decoded content — list previews are truncated and
+newline-collapsed, fine for display, useless as classifier input.
 
-- Entry is an existing file path (after trimming): offer `text/uri-list`
-  and `text/plain` as a union, receiver picks. File managers and
-  browsers take the file; text fields take the path string.
-- Multi-line entry where every line is an existing path: multi-file
-  `text/uri-list`.
-- Path that no longer exists: plain text. Stale history degrades to what
-  it literally is instead of erroring.
-- Binary image entry: offer `image/png`.
+- Entry is a single line that, after trimming and expanding a leading
+  `~`, is an *absolute* path to an existing file or directory: offer
+  `text/uri-list` and `text/plain` as a union, receiver picks. File
+  managers and browsers take the file; text fields take the path
+  string. Relative paths never classify as files — spawned from a
+  keybind the cwd is meaningless, and a copied word like `Documents`
+  must not silently become a file drop.
+- Multi-line entry where every line passes the same test: multi-file
+  `text/uri-list`. (A filename that itself contains a newline is
+  indistinguishable from two lines; it degrades to text, accepted.)
+- Path that no longer exists: plain text. Stale history degrades to
+  what it literally is instead of erroring.
+- Binary entry: sniff the magic bytes and offer the *actual* type
+  (`image/png`, `image/jpeg`, …) — the store keeps whatever bytes the
+  source offered, so png must be detected, not assumed. Unrecognized
+  binary is offered as `application/octet-stream`.
 - Everything else: plain text.
 
 ## History backend
@@ -119,17 +154,18 @@ Open in the details, settled in the shape: the UI should not care where
 history comes from.
 
 - External store, cliphist being the obvious first backend (`cliphist
-  list` for rows, `cliphist decode` on demand). Cheapest path to working
-  software and matches setups that already run cliphist watchers.
+  list` for display rows, `cliphist decode <id>` on demand — id passed
+  as argv, since decode via stdin is fragile about trailing newlines).
 - Own watcher via the data-control protocol family (`zwlr-data-control`,
   and its successor `ext-data-control-v1`), making the program
   self-contained. Not available on every compositor, which is an
   argument for keeping the external-store path alive rather than
   replacing it.
 
-Start with the cliphist backend behind a thin trait; add the native
-watcher when the UI is proven. Puck mode needs only the head of the
-clipboard, which the same trait can serve.
+Start with the cliphist backend behind a thin trait — list and decode,
+nothing more; add the native watcher when the UI is proven. The puck's
+live-clipboard read is deliberately not on this trait: it is a
+different data source with different freshness semantics.
 
 ## Scope
 
@@ -145,11 +181,12 @@ curation verbs are not launch scope and may never be.
 
 The window is a plain xdg toplevel. No layer-shell, no
 compositor-specific protocols in the UI path; tiling compositors float
-it by user rule, stacking desktops treat it as the small utility window
-it is. Styling ships with a neutral default theme plus a `--css <file>`
-flag so any deployment can match its desktop without wrapper hacks (the
-flag exists because retrofitting exactly this onto ripdrag required a
-scoped `XDG_CONFIG_HOME` workaround).
+and place it by user rule (placement rules ship as documented examples,
+starting with niri), stacking desktops treat it as the small utility
+window it is. Styling ships with a neutral default theme plus a `--css
+<file>` flag so any deployment can match its desktop without wrapper
+hacks (the flag exists because retrofitting exactly this onto ripdrag
+required a scoped `XDG_CONFIG_HOME` workaround).
 
 ## Relation to ripdrag
 
@@ -164,23 +201,32 @@ possible but probably unnecessary once the puck exists.
 niri, cliphist watchers already running, wofi as the existing paste
 picker. List mode runs drag-only beside wofi; puck mode takes over the
 yazi binding from ripdrag. Both float via a niri window-rule like the
-ripdrag and askpass panels, and take the warm palette through `--css`.
-None of this is assumed anywhere above.
+ripdrag and askpass panels — the puck's rule also places it — and take
+the warm palette through `--css`. None of this is assumed anywhere
+above.
 
 ## Stack
 
 Rust with gtk4-rs. GTK4 targets Wayland cleanly, and the stack is
 proven on the first-deployment machine by ripdrag. GtkListView for the
-rows; a GtkDragSource on the window itself implements the whole-window
-drag handle, building its content provider lazily in the drag-begin
-handler from the currently selected entry, so decoding only runs for
-the entry actually dragged. Rows may carry their own DragSource too for
-direct mouse-first drags.
+rows. The whole-window drag handle is a single GtkDragSource on the
+window at *capture* propagation phase — at the default bubble phase the
+ListView claims the press and a window-level source never fires. Its
+content provider is returned from the `prepare` signal (by `drag-begin`
+the offered formats are already locked), built lazily from the
+currently selected entry so decoding only runs for the entry actually
+dragged. How cleanly a capture-phase claim coexists with
+click-to-recall on the rows is the single riskiest mechanism in the
+design and the first thing to prototype.
+
+Classification and payload assembly stay plain Rust producing MIME-type
+to bytes mappings (`text/uri-list` built by hand); the GTK content
+provider is a thin byte-backed adapter over that, which keeps the core
+testable without a display.
 
 Estimated size a few hundred lines for the cliphist-backed core with
-both modes; the native watcher grows it from there. The hard parts
-(drag sources, content providers, list rows) are well-trodden gtk4-rs
-ground.
+both modes; the native watcher grows it from there. The remaining parts
+(content providers, list rows) are well-trodden gtk4-rs ground.
 
 ## Open questions
 
@@ -189,9 +235,9 @@ ground.
   a type icon, a truncated preview of the entry, both?
 - Entry count and window height in list mode. Ten entries? Scroll or
   hard cap?
-- Should rows show a type marker (file / files / image / text) so you
-  know what a drop will produce before dragging? Cheap, since the
-  drag-time classification logic exists anyway.
+- Per-row type markers (file / files / image / text) would tell you
+  what a drop will produce before dragging, but classification needs
+  full content, so markers mean decoding every visible row rather than
+  reusing the list preview. Lazy-decode visible rows only, or skip
+  markers?
 - Image thumbnails in rows, or text labels only?
-- Close on focus loss: part of the launcher contract, but does it fight
-  with drag interaction on any compositor?

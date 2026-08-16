@@ -59,6 +59,13 @@ niri window-rule that floats and places it — placement is
 compositor-side and is most of the puck's UX. Switch the yazi binding,
 retire ripdrag. First shipped value.
 
+Outcome (16 August 2026): shipped and validated by hand — DESIGN.md
+and a png uploaded to Google Drive by drag, text dragged from helix
+into a browser search bar. niri floated and centred the puck without
+any window-rule on this machine; contrib/niri.kdl stays as the example
+for setups that need it. yazi's Ctrl-n now pipes the selection through
+wl-copy into the puck; ripdrag retired.
+
 ## M4 — List mode
 
 ListView over the backend: keyboard navigation, filter-as-you-type,

@@ -14,10 +14,10 @@ pub fn content_provider(payload: &Payload) -> gdk::ContentProvider {
         .map(|(mime, bytes)| {
             // Text goes through for_value so GDK's serializers offer every
             // text flavor a receiver might ask for, not just our one MIME.
-            if mime == TEXT_PLAIN {
-                if let Ok(text) = std::str::from_utf8(bytes) {
-                    return gdk::ContentProvider::for_value(&text.to_value());
-                }
+            if mime == TEXT_PLAIN
+                && let Ok(text) = std::str::from_utf8(bytes)
+            {
+                return gdk::ContentProvider::for_value(&text.to_value());
             }
             gdk::ContentProvider::for_bytes(mime, &glib::Bytes::from(bytes.as_slice()))
         })

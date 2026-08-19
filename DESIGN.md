@@ -1,8 +1,11 @@
-# clipdrag
+# yankout
 
 A Wayland clipboard picker in the dmenu tradition whose defining feature
 is that entries can be dragged out, with file paths converted to real
-file drops at drag time. Working name; see open questions.
+file drops at drag time. Named for the workflow: yank in the terminal,
+drag it out into GUI-land (settled 19 August 2026 — clipdrag, the
+original working name, collides with an ICLR 2025 drag-based diffusion
+editing project, and the yank-* namespace was empty).
 
 Idea from August 2026. Assumes Wayland. Assumes nothing about the
 compositor.
@@ -42,7 +45,7 @@ bash — produce draggable content without itself being a Wayland client.
 Terminal users already accept exactly one kind of GUI without
 complaint: dmenu, rofi, wofi, fuzzel. Toolkit programs all, but they
 follow the launcher contract and so read as extensions of the keyboard
-rather than as apps. clipdrag adopts that contract wholesale:
+rather than as apps. yankout adopts that contract wholesale:
 
 - Spawned by keybind, ephemeral, gone on Esc; list mode also closes on
   focus loss. The puck is exempt from focus-loss close — see below.
@@ -93,15 +96,15 @@ this program to be the only recall path.
 
 ### Puck mode
 
-`clipdrag --current` (flag name open) shows no list at all: a
+`yankout --current` (flag name open) shows no list at all: a
 postage-stamp window whose entire surface drags the *live clipboard* —
 read directly (`wl-paste` or equivalent), not through the history
-backend, because history is fed by a watcher and `wl-copy && clipdrag
+backend, because history is fed by a watcher and `wl-copy && yankout
 --current` would race its ingest. Same drag-time rules, exit on drop or
 Esc. Selection happens wherever it already happened — the terminal:
 
     # raw bash grows drag support
-    echo ~/report.pdf | wl-copy && clipdrag --current
+    echo ~/report.pdf | wl-copy && yankout --current
 
     # yazi: yank already writes the clipboard; one key spawns the puck
 
@@ -176,7 +179,7 @@ different data source with different freshness semantics.
 The dmenu framing settles how much manager belongs in scope: little. In
 the TUI-centric deployment that motivates this program, browsing and
 searching history is the terminal's job (fzf over `cliphist list`, or
-an existing picker like fuzzel), and clipdrag's identity is the thing
+an existing picker like fuzzel), and yankout's identity is the thing
 that turns clipboard content into a drag. Filter-as-you-type in list
 mode is part of the launcher contract and stays; pin, delete and other
 curation verbs are not launch scope and may never be.
@@ -236,7 +239,6 @@ both modes; the native watcher grows it from there. The remaining parts
 
 ## Open questions
 
-- Name. clipdrag is descriptive but flat. draghist? yankout?
 - Puck flag name and appearance: `--current`? What does the puck show —
   a type icon, a truncated preview of the entry, both?
 - Entry count and window height in list mode. Ten entries? Scroll or

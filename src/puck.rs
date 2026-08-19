@@ -12,25 +12,25 @@ use std::rc::Rc;
 use gtk::prelude::*;
 use gtk::{gdk, glib};
 
-use clipdrag::interpret::{self, Kind, Payload};
-use clipdrag::{clipboard, provider};
+use yankout::interpret::{self, Kind, Payload};
+use yankout::{clipboard, provider};
 
 pub fn run(user_css: Option<String>) -> ExitCode {
     let content = match clipboard::read() {
         Ok(content) => content,
         Err(e) => {
-            eprintln!("clipdrag: {e}");
+            eprintln!("yankout: {e}");
             return ExitCode::FAILURE;
         }
     };
     let payload = interpret::interpret(&content);
 
     // Modes get distinct application ids: under a shared id GApplication
-    // uniqueness would make a `clipdrag` launch re-present an open puck
+    // uniqueness would make a `yankout` launch re-present an open puck
     // instead of showing the list, and compositor rules couldn't tell the
     // windows apart.
     let app = gtk::Application::builder()
-        .application_id("dev.clipdrag.puck")
+        .application_id("dev.yankout.puck")
         .build();
     app.connect_activate(move |app| {
         crate::theme::apply(user_css.as_deref());
@@ -65,7 +65,7 @@ fn build_puck(app: &gtk::Application, payload: &Payload) {
 
     let window = gtk::ApplicationWindow::builder()
         .application(app)
-        .title("clipdrag")
+        .title("yankout")
         .resizable(false)
         .child(&vbox)
         .build();

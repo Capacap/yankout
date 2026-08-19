@@ -6,11 +6,11 @@ use gtk4 as gtk;
 use gtk::prelude::*;
 use gtk::{gdk, glib};
 
-const FILE_PATH: &str = "/home/capacap/Projects/clipdrag/Cargo.toml";
+const FILE_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml");
 
 fn main() -> glib::ExitCode {
     let app = gtk::Application::builder()
-        .application_id("dev.capacap.clipdrag.spike-drag")
+        .application_id("dev.capacap.yankout.spike-drag")
         .build();
     app.connect_activate(build_ui);
     app.run()
@@ -18,7 +18,7 @@ fn main() -> glib::ExitCode {
 
 fn build_ui(app: &gtk::Application) {
     let string_tile = drag_tile("drag me: plain string", || {
-        gdk::ContentProvider::for_value(&"hello from clipdrag spike".to_value())
+        gdk::ContentProvider::for_value(&"hello from yankout spike".to_value())
     });
 
     let file_tile = drag_tile("drag me: file path", || {
@@ -45,7 +45,7 @@ fn build_ui(app: &gtk::Application) {
 
     let window = gtk::ApplicationWindow::builder()
         .application(app)
-        .title("clipdrag spike: drag out")
+        .title("yankout spike: drag out")
         .default_width(280)
         .child(&vbox)
         .build();

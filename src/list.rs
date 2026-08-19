@@ -14,22 +14,22 @@ use std::rc::Rc;
 use gtk::prelude::*;
 use gtk::{gdk, gio, glib, pango};
 
-use clipdrag::history::{Cliphist, Entry, History};
-use clipdrag::{clipboard, interpret, provider};
+use yankout::history::{Cliphist, Entry, History};
+use yankout::{clipboard, interpret, provider};
 
 pub fn run(user_css: Option<String>) -> ExitCode {
     let backend: Rc<dyn History> = Rc::new(Cliphist::new());
     let entries = match backend.entries() {
         Ok(entries) => entries,
         Err(e) => {
-            eprintln!("clipdrag: {e}");
+            eprintln!("yankout: {e}");
             return ExitCode::FAILURE;
         }
     };
 
     // Distinct from the puck's id — see the comment in puck.rs.
     let app = gtk::Application::builder()
-        .application_id("dev.clipdrag.list")
+        .application_id("dev.yankout.list")
         .build();
     app.connect_activate(move |app| {
         crate::theme::apply(user_css.as_deref());
@@ -110,7 +110,7 @@ fn build_list(app: &gtk::Application, backend: Rc<dyn History>, entries: &[Entry
 
     let window = gtk::ApplicationWindow::builder()
         .application(app)
-        .title("clipdrag")
+        .title("yankout")
         .default_width(440)
         .default_height(400)
         .child(&vbox)
@@ -128,7 +128,7 @@ fn build_list(app: &gtk::Application, backend: Rc<dyn History>, entries: &[Entry
             match backend.content(&entry.id) {
                 Ok(content) => Some(provider::content_provider(&interpret::interpret(&content))),
                 Err(e) => {
-                    eprintln!("clipdrag: {e}");
+                    eprintln!("yankout: {e}");
                     None
                 }
             }
@@ -271,6 +271,6 @@ fn recall(backend: &dyn History, entry: &Entry, window: &gtk::ApplicationWindow)
         .and_then(|content| clipboard::write(&content))
     {
         Ok(()) => window.close(),
-        Err(e) => eprintln!("clipdrag: recall failed: {e}"),
+        Err(e) => eprintln!("yankout: recall failed: {e}"),
     }
 }

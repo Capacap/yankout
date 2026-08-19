@@ -13,7 +13,7 @@ use gtk::{gdk, glib};
 
 fn main() -> glib::ExitCode {
     let app = gtk::Application::builder()
-        .application_id("dev.capacap.clipdrag.spike-list")
+        .application_id("dev.capacap.yankout.spike-list")
         .build();
     app.connect_activate(build_ui);
     app.run()
@@ -51,7 +51,7 @@ fn build_ui(app: &gtk::Application) {
 
     let window = gtk::ApplicationWindow::builder()
         .application(app)
-        .title("clipdrag spike: list + capture drag")
+        .title("yankout spike: list + capture drag")
         .default_width(320)
         .default_height(360)
         .child(&list)

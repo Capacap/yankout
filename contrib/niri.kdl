@@ -1,4 +1,4 @@
-// clipdrag niri snippets. A Wayland xdg toplevel cannot position itself,
+// yankout niri snippets. A Wayland xdg toplevel cannot position itself,
 // so floating and placing the windows is the compositor's job — merge
 // these into ~/.config/niri/config.kdl and adjust to taste.
 
@@ -6,13 +6,13 @@
 // rule matters on setups where that heuristic is off or placement should
 // differ.
 window-rule {
-    match app-id=r#"^dev\.clipdrag\.puck$"#
+    match app-id=r#"^dev\.yankout\.puck$"#
     open-floating true
 }
 
 // The list window is resizable and would tile without a rule.
 window-rule {
-    match app-id=r#"^dev\.clipdrag\.list$"#
+    match app-id=r#"^dev\.yankout\.list$"#
     open-floating true
     default-column-width { fixed 440; }
     default-window-height { fixed 400; }
@@ -20,4 +20,4 @@ window-rule {
 
 // Spawn bind (goes inside the binds block). Use a full path if
 // ~/.cargo/bin is not on the niri session's PATH.
-// Mod+Shift+C hotkey-overlay-title="Clipboard drag" { spawn "clipdrag"; }
+// Mod+Shift+C hotkey-overlay-title="Clipboard drag" { spawn "yankout"; }

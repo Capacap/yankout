@@ -1,6 +1,6 @@
 //! Live clipboard access via wl-clipboard. Deliberately not part of the
 //! History trait: history is fed by a watcher, and a puck reading history
-//! (`wl-copy && clipdrag --current`) would race the watcher's ingest.
+//! (`wl-copy && yankout --current`) would race the watcher's ingest.
 
 use std::io::Write as _;
 use std::process::{Command, Stdio};

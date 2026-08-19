@@ -14,7 +14,7 @@ fn main() -> ExitCode {
             "--css" => match args.next() {
                 Some(path) => css_path = Some(path),
                 None => {
-                    eprintln!("clipdrag: --css takes a file argument\n{USAGE}");
+                    eprintln!("yankout: --css takes a file argument\n{USAGE}");
                     return ExitCode::from(2);
                 }
             },
@@ -23,7 +23,7 @@ fn main() -> ExitCode {
                 return ExitCode::SUCCESS;
             }
             other => {
-                eprintln!("clipdrag: unknown argument {other}\n{USAGE}");
+                eprintln!("yankout: unknown argument {other}\n{USAGE}");
                 return ExitCode::from(2);
             }
         }
@@ -32,7 +32,7 @@ fn main() -> ExitCode {
     let user_css = match theme::read_user_css(css_path.as_deref()) {
         Ok(css) => css,
         Err(e) => {
-            eprintln!("clipdrag: {e}");
+            eprintln!("yankout: {e}");
             return ExitCode::FAILURE;
         }
     };
@@ -45,7 +45,7 @@ fn main() -> ExitCode {
 }
 
 const USAGE: &str = "\
-usage: clipdrag [--current] [--css <file>]
+usage: yankout [--current] [--css <file>]
   (no args)    list recent clipboard history: type to filter, Enter or
                double-click to recall, drag anywhere on the window to
                drag the selected entry out; closes on Esc, focus loss,

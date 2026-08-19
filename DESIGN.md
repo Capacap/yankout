@@ -243,12 +243,15 @@ both modes; the native watcher grows it from there. The remaining parts
   a type icon, a truncated preview of the entry, both?
 - Entry count and window height in list mode. Ten entries? Scroll or
   hard cap?
-- Per-row type markers (file / files / image / text) would tell you
-  what a drop will produce before dragging, but classification needs
-  full content, so markers mean decoding every visible row rather than
-  reusing the list preview. Lazy-decode visible rows only, or skip
-  markers?
 - Image thumbnails in rows, or text labels only?
+- Visual direction (deferred at M5 close): the user's ideal is very
+  minimalistic and TUI-like, in the spirit of their fuzzel setup —
+  flat dark panel, monospace, dim placeholder text, id column plus
+  preview per row, a single warm highlight bar for selection, no
+  visible chrome. Current default + warm.css validated but not the
+  end state. Per-row type markers were skipped at M5 (decode cost per
+  visible row, and marker meaning depends on temp-file
+  materialization below — revisit together).
 - Binary entries drag as raw typed bytes (`image/png`, …), which only
   targets that accept image MIME on drop can take; upload zones and
   file managers want `text/uri-list`, i.e. a real file. Materialize

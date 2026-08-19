@@ -92,6 +92,17 @@ per-row type-marker decision (markers need full decode of visible
 rows — see DESIGN.md open questions), and a name decision before
 anything gets published.
 
+Outcome (19 August 2026): shipped and validated by hand — the neutral
+monospace default and a layered `contrib/warm.css` render distinctly.
+Per-row type markers skipped: a decode subprocess per visible row buys
+information the preview mostly carries, and what a marker should say
+depends on the unsettled temp-file materialization question — revisit
+the two together. Name settled as yankout (clipdrag collides with an
+ICLR 2025 drag-based diffusion editor); rename swept through code,
+app-ids, binds, and docs, private repo at github.com/Capacap/yankout.
+README got a prose pass. Deferred: the user's ideal visual is minimal
+and TUI-like, fuzzel-style — see DESIGN.md open questions.
+
 ## M6 — Later
 
 Native `ext-data-control-v1` watcher. Automated drag e2e rig only if

@@ -1,0 +1,26 @@
+/* Example --css theme: a warm terminal palette. Start here and adjust;
+ * the class reference is in README.md. */
+
+window {
+    background-color: #1c1b19;
+    color: #c4b8a0;
+}
+
+.history,
+.history row {
+    background: transparent;
+}
+
+.history row:selected {
+    background-color: #665d52;
+    color: #fce8c3;
+}
+
+searchentry {
+    background-color: #262421;
+    color: #c4b8a0;
+}
+
+.puck-kind {
+    color: #fce8c3;
+}

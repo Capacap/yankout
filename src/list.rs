@@ -17,7 +17,7 @@ use gtk::{gdk, gio, glib, pango};
 use clipdrag::history::{Cliphist, Entry, History};
 use clipdrag::{clipboard, interpret, provider};
 
-pub fn run() -> ExitCode {
+pub fn run(user_css: Option<String>) -> ExitCode {
     let backend: Rc<dyn History> = Rc::new(Cliphist::new());
     let entries = match backend.entries() {
         Ok(entries) => entries,
@@ -31,7 +31,10 @@ pub fn run() -> ExitCode {
     let app = gtk::Application::builder()
         .application_id("dev.clipdrag.list")
         .build();
-    app.connect_activate(move |app| build_list(app, backend.clone(), &entries));
+    app.connect_activate(move |app| {
+        crate::theme::apply(user_css.as_deref());
+        build_list(app, backend.clone(), &entries);
+    });
     // GApplication must not see our argv.
     let code: i32 = app.run_with_args::<&str>(&[]).into();
     ExitCode::from(code as u8)

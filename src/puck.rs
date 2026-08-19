@@ -15,7 +15,7 @@ use gtk::{gdk, glib};
 use clipdrag::interpret::{self, Kind, Payload};
 use clipdrag::{clipboard, provider};
 
-pub fn run() -> ExitCode {
+pub fn run(user_css: Option<String>) -> ExitCode {
     let content = match clipboard::read() {
         Ok(content) => content,
         Err(e) => {
@@ -32,7 +32,10 @@ pub fn run() -> ExitCode {
     let app = gtk::Application::builder()
         .application_id("dev.clipdrag.puck")
         .build();
-    app.connect_activate(move |app| build_puck(app, &payload));
+    app.connect_activate(move |app| {
+        crate::theme::apply(user_css.as_deref());
+        build_puck(app, &payload);
+    });
     // GApplication must not see our argv: it would reject --current.
     let code: i32 = app.run_with_args::<&str>(&[]).into();
     ExitCode::from(code as u8)

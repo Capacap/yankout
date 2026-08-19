@@ -1,0 +1,29 @@
+/* Neutral default theme: launcher-shaped typography, no colors of its
+ * own — inherits the GTK theme's palette so it follows light/dark.
+ * Deployments override or extend with --css <file>. */
+
+.history {
+    font-family: monospace;
+    font-size: 0.95em;
+}
+
+.empty {
+    font-family: monospace;
+    opacity: 0.55;
+}
+
+searchentry {
+    font-family: monospace;
+    margin: 6px;
+}
+
+.puck-kind {
+    font-family: monospace;
+    font-weight: bold;
+}
+
+.puck-detail {
+    font-family: monospace;
+    font-size: 0.85em;
+    opacity: 0.7;
+}

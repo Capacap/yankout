@@ -3,6 +3,7 @@ pub mod history;
 pub mod interpret;
 pub mod provider;
 pub mod store;
+pub mod watch;
 
 #[derive(Debug)]
 pub struct Error(pub String);

@@ -133,19 +133,25 @@ still reads the live clipboard and is untouched.
 
 Tasks, in order (commit per task as `M6: <task>`):
 
-- [ ] Store module (`store.rs`): sequence naming, atomic write,
+- [x] Store module (`store.rs`): sequence naming, atomic write,
       size+hash dedup index, bump-by-rename, cap eviction, flock;
       unit tests against tempdirs.
-- [ ] Watcher (`watch.rs`): wayland-client dispatch, ext with zwlr
+- [x] Watcher (`watch.rs`): wayland-client dispatch, ext with zwlr
       fallback, MIME priority, password-hint skip, feeds the store.
-- [ ] Native backend (`history.rs`): History impl over the store dir,
+- [x] Native backend (`history.rs`): History impl over the store dir,
       previews with binary labels reusing interpret's magic sniff.
-- [ ] Wiring: `yankout watch` CLI mode, backend auto-select plus
+- [x] Wiring: `yankout watch` CLI mode, backend auto-select plus
       `--backend`, README, swap the niri startup lines.
 
-Validation is living with it: startup lines swapped, native history
-daily-driven, cliphist fallback exercised once by hand. Automated drag
-e2e rig only if regressions ever justify it.
+Wiring note: the cliphist watchers were kept, not swapped out — the
+Mod+C fuzzel picker still reads cliphist (see the DESIGN.md open
+question on retiring it), so `yankout watch` runs beside them and list
+mode auto-picks native while it is alive.
+
+Validation is living with it: native history daily-driven, cliphist
+fallback exercised once by hand (`--backend cliphist`, or with the
+watcher stopped). Automated drag e2e rig only if regressions ever
+justify it.
 
 ## Testing strategy
 

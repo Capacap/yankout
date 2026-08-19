@@ -252,6 +252,12 @@ both modes; the native watcher grows it from there. The remaining parts
   end state. Per-row type markers were skipped at M5 (decode cost per
   visible row, and marker meaning depends on temp-file
   materialization below — revisit together).
+- Retiring cliphist on the first-deployment machine: the Mod+C fuzzel
+  picker (and any terminal browsing via `cliphist list`) reads
+  cliphist, so its watchers keep running beside `yankout watch` until
+  the native store has a terminal-readable listing — a print verb on
+  the binary, or fzf over the store files. Only then can the wl-paste
+  lines go.
 - Binary entries drag as raw typed bytes (`image/png`, …), which only
   targets that accept image MIME on drop can take; upload zones and
   file managers want `text/uri-list`, i.e. a real file. Materialize

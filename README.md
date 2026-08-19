@@ -43,12 +43,30 @@ Decided at drag time from the full entry content:
   (`image/png`, …), or `application/octet-stream` when nothing matches.
 - Everything else: plain text.
 
+## History
+
+`yankout watch` maintains yankout's own clipboard history, one
+instance per session. It talks to the compositor directly over
+ext-data-control-v1, or the older zwlr-data-control where that is all
+there is, and keeps entries under `$XDG_DATA_HOME/yankout/history`
+(newest first, deduplicated, capped at 750). Offers marked
+`x-kde-passwordManagerHint` are never stored, so password managers
+stay out of history. Start it from the compositor config; on niri:
+
+```kdl
+spawn-at-startup "yankout" "watch"
+```
+
+While a watcher is running, list mode reads this history. Otherwise it
+falls back to [cliphist](https://github.com/sentriz/cliphist), which
+also covers compositors that offer no data-control protocol at all.
+`--backend cliphist|native` forces the choice.
+
 ## Requirements
 
-- Wayland with a GTK4-capable session (any compositor; no
-  compositor-specific protocols are used)
-- [cliphist](https://github.com/sentriz/cliphist) with its watchers
-  running, as the history backend
+- Wayland with a GTK4-capable session (any compositor; the UI path
+  uses no compositor-specific protocols, and the watcher needs
+  data-control or a cliphist fallback as described above)
 - [wl-clipboard](https://github.com/bugaevc/wl-clipboard) (`wl-paste`
   for the puck, `wl-copy` for recall)
 

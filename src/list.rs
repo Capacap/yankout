@@ -14,11 +14,11 @@ use std::rc::Rc;
 use gtk::prelude::*;
 use gtk::{gdk, gio, glib, pango};
 
-use yankout::history::{Cliphist, Entry, History};
+use yankout::history::{Entry, History};
 use yankout::{clipboard, interpret, provider};
 
-pub fn run(user_css: Option<String>) -> ExitCode {
-    let backend: Rc<dyn History> = Rc::new(Cliphist::new());
+pub fn run(user_css: Option<String>, backend: Box<dyn History>) -> ExitCode {
+    let backend: Rc<dyn History> = Rc::from(backend);
     let entries = match backend.entries() {
         Ok(entries) => entries,
         Err(e) => {

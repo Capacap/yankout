@@ -105,6 +105,30 @@ fn parse_list(stdout: &str) -> Vec<Entry> {
         .collect()
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Backend {
+    /// Native while a watcher is feeding the store, cliphist otherwise:
+    /// unattended native history would silently go stale.
+    Auto,
+    Cliphist,
+    Native,
+}
+
+pub fn select(choice: Backend) -> Result<Box<dyn History>, Error> {
+    match choice {
+        Backend::Cliphist => Ok(Box::new(Cliphist::new())),
+        Backend::Native => Ok(Box::new(Native::new(crate::store::default_dir()?))),
+        Backend::Auto => {
+            let dir = crate::store::default_dir()?;
+            if crate::store::watcher_active(&dir) {
+                Ok(Box::new(Native::new(dir)))
+            } else {
+                Ok(Box::new(Cliphist::new()))
+            }
+        }
+    }
+}
+
 /// The native store fed by `yankout watch`. Ids are the store's
 /// sequence numbers; previews are built here from each entry's first
 /// bytes, since the store itself keeps nothing but content.

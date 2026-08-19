@@ -2,6 +2,7 @@ pub mod clipboard;
 pub mod history;
 pub mod interpret;
 pub mod provider;
+pub mod store;
 
 #[derive(Debug)]
 pub struct Error(pub String);

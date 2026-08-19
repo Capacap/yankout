@@ -103,10 +103,49 @@ app-ids, binds, and docs, private repo at github.com/Capacap/yankout.
 README got a prose pass. Deferred: the user's ideal visual is minimal
 and TUI-like, fuzzel-style — see DESIGN.md open questions.
 
-## M6 — Later
+## M6 — Native watcher
 
-Native `ext-data-control-v1` watcher. Automated drag e2e rig only if
-regressions ever justify it.
+`yankout watch` speaks the data-control protocol directly and maintains
+yankout's own history store, replacing the `wl-paste --watch cliphist
+store` pair. cliphist stays as the fallback backend for compositors
+without data-control. Scouted 19 August 2026: niri ships
+`ext_data_control_manager_v1` since 25.11 (this machine runs 26.04);
+the `wayland-protocols` crate has the ext protocol behind its `staging`
+feature and `wayland-protocols-wlr` has the zwlr fallback;
+wl-clipboard-rs is one-shot only, so the watcher is hand-rolled
+`wayland-client` dispatch code.
+
+Settled design: store is a directory of files under
+`$XDG_DATA_HOME/yankout/history`, one file per entry named by
+zero-padded sequence number (the filename is the ordering and the
+entry id), written temp-then-rename so a concurrent list launch never
+sees a torn entry. Dedup via an in-memory size+hash index built once
+at watcher startup; a hit bumps by *renaming* to the head sequence —
+zero data rewritten (recall echoes through wl-copy back into the
+watcher, so bumps are exactly as frequent as recall). Cap 750, oldest
+evicted. flock on the store directory guards against double watchers.
+Per selection the watcher picks one MIME (image/png, then other
+image/*, then UTF-8 text) and skips offers advertising
+`x-kde-passwordManagerHint`. List mode picks the backend
+automatically — native store present and locked means native, else
+cliphist — with `--backend cliphist|native` as the override. The puck
+still reads the live clipboard and is untouched.
+
+Tasks, in order (commit per task as `M6: <task>`):
+
+- [ ] Store module (`store.rs`): sequence naming, atomic write,
+      size+hash dedup index, bump-by-rename, cap eviction, flock;
+      unit tests against tempdirs.
+- [ ] Watcher (`watch.rs`): wayland-client dispatch, ext with zwlr
+      fallback, MIME priority, password-hint skip, feeds the store.
+- [ ] Native backend (`history.rs`): History impl over the store dir,
+      previews with binary labels reusing interpret's magic sniff.
+- [ ] Wiring: `yankout watch` CLI mode, backend auto-select plus
+      `--backend`, README, swap the niri startup lines.
+
+Validation is living with it: startup lines swapped, native history
+daily-driven, cliphist fallback exercised once by hand. Automated drag
+e2e rig only if regressions ever justify it.
 
 ## Testing strategy
 

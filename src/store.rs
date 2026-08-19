@@ -80,6 +80,22 @@ impl Store {
         fs::read(self.path(seq)).map_err(|e| Error(format!("reading entry {seq}: {e}")))
     }
 
+    /// First `limit` bytes plus the entry's total size — enough for a
+    /// preview without pulling a multi-megabyte image into memory.
+    pub fn read_prefix(&self, seq: u64, limit: usize) -> Result<(Vec<u8>, u64), Error> {
+        use std::io::Read;
+        let mut file = File::open(self.path(seq))
+            .map_err(|e| Error(format!("reading entry {seq}: {e}")))?;
+        let total = file
+            .metadata()
+            .map_err(|e| Error(format!("reading entry {seq}: {e}")))?
+            .len();
+        let mut prefix = vec![0; limit.min(total as usize)];
+        file.read_exact(&mut prefix)
+            .map_err(|e| Error(format!("reading entry {seq}: {e}")))?;
+        Ok((prefix, total))
+    }
+
     fn path(&self, seq: u64) -> PathBuf {
         self.dir.join(format!("{seq:020}"))
     }

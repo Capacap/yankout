@@ -105,6 +105,80 @@ fn parse_list(stdout: &str) -> Vec<Entry> {
         .collect()
 }
 
+/// The native store fed by `yankout watch`. Ids are the store's
+/// sequence numbers; previews are built here from each entry's first
+/// bytes, since the store itself keeps nothing but content.
+pub struct Native {
+    store: crate::store::Store,
+}
+
+/// Enough bytes to sniff an image and fill a preview line.
+const PREVIEW_BYTES: usize = 512;
+const PREVIEW_CHARS: usize = 100;
+
+impl Native {
+    pub fn new(dir: impl Into<PathBuf>) -> Self {
+        Native {
+            store: crate::store::Store::open(dir),
+        }
+    }
+}
+
+impl History for Native {
+    fn entries(&self) -> Result<Vec<Entry>, Error> {
+        Ok(self
+            .store
+            .list()?
+            .into_iter()
+            .filter_map(|seq| {
+                // a read failure here means the watcher evicted the
+                // entry between list and read — it is gone, not an error
+                let (prefix, total) = self.store.read_prefix(seq, PREVIEW_BYTES).ok()?;
+                Some(Entry {
+                    id: seq.to_string(),
+                    preview: preview(&prefix, total),
+                })
+            })
+            .collect())
+    }
+
+    fn content(&self, id: &str) -> Result<Vec<u8>, Error> {
+        let seq: u64 = id
+            .parse()
+            .map_err(|_| Error(format!("not a native history id: {id}")))?;
+        self.store.read(seq)
+    }
+}
+
+fn preview(prefix: &[u8], total: u64) -> String {
+    if let Some(mime) = crate::interpret::sniff_image(prefix) {
+        return format!("[[ {mime} {} ]]", human_size(total));
+    }
+    if prefix.contains(&0) {
+        return format!("[[ binary {} ]]", human_size(total));
+    }
+    let text = String::from_utf8_lossy(prefix);
+    // collapse all whitespace runs: previews are one line
+    let mut collapsed = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    if collapsed.chars().count() > PREVIEW_CHARS || total > prefix.len() as u64 {
+        collapsed = collapsed.chars().take(PREVIEW_CHARS).collect();
+        // a prefix cut mid-character leaves a replacement char at the end
+        collapsed = collapsed.trim_end_matches('\u{FFFD}').to_string();
+        collapsed.push('…');
+    }
+    collapsed
+}
+
+fn human_size(bytes: u64) -> String {
+    if bytes < 1024 {
+        format!("{bytes} B")
+    } else if bytes < 1024 * 1024 {
+        format!("{} KiB", bytes / 1024)
+    } else {
+        format!("{:.1} MiB", bytes as f64 / (1024.0 * 1024.0))
+    }
+}
+
 /// Test double for everything downstream of the trait.
 pub struct InMemory(pub Vec<(Entry, Vec<u8>)>);
 
@@ -155,6 +229,49 @@ mod tests {
         let entries = parse_list("no tab here\n9\tok\n\n");
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].id, "9");
+    }
+
+    #[test]
+    fn native_backend_lists_and_decodes() {
+        let dir = tempfile::tempdir().unwrap();
+        {
+            let mut w = crate::store::Writer::open(dir.path(), 10).unwrap();
+            w.store(b"copied  text\nsecond line").unwrap();
+            let mut png = vec![0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
+            png.extend_from_slice(&[0u8; 2040]);
+            w.store(&png).unwrap();
+        }
+        let native = Native::new(dir.path());
+        let entries = native.entries().unwrap();
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0].preview, "[[ image/png 2 KiB ]]");
+        assert_eq!(entries[1].preview, "copied text second line");
+        assert_eq!(
+            native.content(&entries[1].id).unwrap(),
+            b"copied  text\nsecond line"
+        );
+    }
+
+    #[test]
+    fn native_long_text_previews_truncated() {
+        let dir = tempfile::tempdir().unwrap();
+        let long = "word ".repeat(300);
+        {
+            let mut w = crate::store::Writer::open(dir.path(), 10).unwrap();
+            w.store(long.as_bytes()).unwrap();
+        }
+        let entries = Native::new(dir.path()).entries().unwrap();
+        assert!(entries[0].preview.ends_with('…'));
+        assert!(entries[0].preview.chars().count() <= PREVIEW_CHARS + 1);
+    }
+
+    #[test]
+    fn native_empty_store_is_empty_history() {
+        let dir = tempfile::tempdir().unwrap();
+        let native = Native::new(dir.path().join("never-created"));
+        assert_eq!(native.entries().unwrap(), Vec::new());
+        assert!(native.content("0").is_err());
+        assert!(native.content("not-a-seq").is_err());
     }
 
     #[test]

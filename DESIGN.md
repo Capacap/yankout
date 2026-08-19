@@ -176,7 +176,7 @@ different data source with different freshness semantics.
 The dmenu framing settles how much manager belongs in scope: little. In
 the TUI-centric deployment that motivates this program, browsing and
 searching history is the terminal's job (fzf over `cliphist list`, or
-an existing picker like wofi), and clipdrag's identity is the thing
+an existing picker like fuzzel), and clipdrag's identity is the thing
 that turns clipboard content into a drag. Filter-as-you-type in list
 mode is part of the launcher contract and stays; pin, delete and other
 curation verbs are not launch scope and may never be.
@@ -202,8 +202,8 @@ possible but probably unnecessary once the puck exists.
 
 ## First deployment (this machine)
 
-niri, cliphist watchers already running, wofi as the existing paste
-picker. List mode runs drag-only beside wofi; puck mode takes over the
+niri, cliphist watchers already running, fuzzel as the existing paste
+picker. List mode runs drag-only beside fuzzel; puck mode takes over the
 yazi binding from ripdrag. Both float via a niri window-rule like the
 ripdrag and askpass panels — the puck's rule also places it — and take
 the warm palette through `--css`. None of this is assumed anywhere
@@ -247,3 +247,8 @@ both modes; the native watcher grows it from there. The remaining parts
   reusing the list preview. Lazy-decode visible rows only, or skip
   markers?
 - Image thumbnails in rows, or text labels only?
+- Binary entries drag as raw typed bytes (`image/png`, …), which only
+  targets that accept image MIME on drop can take; upload zones and
+  file managers want `text/uri-list`, i.e. a real file. Materialize
+  binary entries to a temp file at drag time and offer a uri-list
+  alongside the bytes? Opens temp-file lifetime and naming questions.

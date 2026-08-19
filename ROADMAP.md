@@ -74,6 +74,17 @@ single-click-activate; its select-on-hover steals keyboard selection —
 M0 finding), the capture-phase whole-window drag handle, close on Esc
 and focus loss, "history empty" row. Daily-drivable picker.
 
+Outcome (19 August 2026): shipped and validated by hand — filter,
+Enter/double-click recall, and whole-window drag all work; wired to
+Mod+Shift+C with a niri float rule (the resizable list window tiles
+without one; the fixed-size puck floats on its own). The modes got
+distinct application ids (`dev.clipdrag.list` / `dev.clipdrag.puck`) —
+under a shared id GApplication uniqueness made one mode re-present the
+other, and compositor rules couldn't tell the windows apart. Noted in
+validation: binary image entries drag as raw `image/*` bytes, which
+file-drop targets refuse — images land as files only via path entries
+(see DESIGN.md open questions on temp-file materialization).
+
 ## M5 — Fit and finish
 
 `--css` plus the neutral default theme, documented window rules, the

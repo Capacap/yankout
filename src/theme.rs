@@ -5,17 +5,18 @@
 use gtk4 as gtk;
 
 use gtk::gdk;
+use std::path::{Path, PathBuf};
 
 const DEFAULT: &str = include_str!("theme.css");
 
 /// Read the user layer up front so a bad file fails before GTK starts.
 /// `--css` wins outright; otherwise the config-dir file applies when it
 /// exists (absence is the common case and silent, any other error is not).
-pub fn read_user_css(path: Option<&str>) -> Result<Option<String>, String> {
+pub fn read_user_css(path: Option<&Path>) -> Result<Option<String>, String> {
     if let Some(p) = path {
         return std::fs::read_to_string(p)
             .map(Some)
-            .map_err(|e| format!("cannot read css file {p}: {e}"));
+            .map_err(|e| format!("cannot read css file {}: {e}", p.display()));
     }
     let Some(p) = config_css_path() else {
         return Ok(None);
@@ -28,13 +29,11 @@ pub fn read_user_css(path: Option<&str>) -> Result<Option<String>, String> {
 }
 
 /// `$XDG_CONFIG_HOME/yankout/style.css`, falling back to `~/.config`.
-pub fn config_css_path() -> Option<std::path::PathBuf> {
+pub fn config_css_path() -> Option<PathBuf> {
     let base = std::env::var_os("XDG_CONFIG_HOME")
         .filter(|v| !v.is_empty())
-        .map(std::path::PathBuf::from)
-        .or_else(|| {
-            std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(".config"))
-        })?;
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))?;
     Some(base.join("yankout").join("style.css"))
 }
 

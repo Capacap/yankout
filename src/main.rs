@@ -3,132 +3,111 @@ mod provider;
 mod puck;
 mod theme;
 
+use std::path::PathBuf;
 use std::process::ExitCode;
+
+use clap::{Parser, Subcommand, ValueEnum};
 
 use yankout_core::history::Backend;
 
-#[derive(Debug, PartialEq, Eq)]
+/// Clipboard history that leaves by drag.
+///
+/// With no verb, opens the history list: type to filter, Enter or
+/// double-click to recall, drag anywhere on the window to drag the
+/// selected entry out; closes on Esc, focus loss, or a completed drop.
+#[derive(Parser, Debug, PartialEq, Eq)]
+#[command(name = "yankout", version, args_conflicts_with_subcommands = true)]
+struct Cli {
+    #[command(subcommand)]
+    verb: Option<Verb>,
+
+    /// Show a puck that drags the current clipboard out; exits after a
+    /// successful drop, or on Esc
+    #[arg(long, conflicts_with = "backend")]
+    current: bool,
+
+    /// Load this CSS on top of the default theme instead of
+    /// $XDG_CONFIG_HOME/yankout/style.css
+    #[arg(long, value_name = "FILE")]
+    css: Option<PathBuf>,
+
+    /// History backend; the default picks native while a watcher is
+    /// running, else cliphist if installed
+    #[arg(long, value_enum)]
+    backend: Option<BackendArg>,
+}
+
+#[derive(Subcommand, Debug, PartialEq, Eq)]
 enum Verb {
-    /// The list window (no verb).
-    Window,
-    Puck,
+    /// Print history as <id>TAB<preview> lines, newest first
+    List {
+        /// History backend (default: native while a watcher runs, else cliphist)
+        #[arg(long, value_enum)]
+        backend: Option<BackendArg>,
+    },
+    /// Write one entry's raw content to stdout
+    ///
+    /// The id is the argument, or the first tab-field of the first
+    /// stdin line, so a picked `list` line can be piped back whole.
+    Decode {
+        /// Entry id as printed by `list`; read from stdin when omitted
+        id: Option<String>,
+        /// History backend (default: native while a watcher runs, else cliphist)
+        #[arg(long, value_enum)]
+        backend: Option<BackendArg>,
+    },
+    /// Maintain yankout's own clipboard history via the data-control
+    /// protocol, replacing cliphist's watchers
     Watch,
-    List,
-    Decode(Option<String>),
 }
 
-#[derive(Debug, PartialEq, Eq)]
-struct Invocation {
-    verb: Verb,
-    css_path: Option<String>,
-    backend: Backend,
+#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+enum BackendArg {
+    Cliphist,
+    Native,
 }
 
-enum Parsed {
-    Run(Invocation),
-    Help,
-}
-
-/// Exactly one verb, and only the flags that verb uses: a flag that
-/// silently did nothing would hide a typo.
-fn parse(args: impl IntoIterator<Item = String>) -> Result<Parsed, String> {
-    let mut args = args.into_iter().peekable();
-    let mut verb: Option<Verb> = None;
-    let mut css_path = None;
-    let mut backend = Backend::Auto;
-    let set_verb = |slot: &mut Option<Verb>, v: Verb| -> Result<(), String> {
-        match slot {
-            Some(_) => Err("only one mode per invocation".into()),
-            None => {
-                *slot = Some(v);
-                Ok(())
-            }
-        }
-    };
-    while let Some(arg) = args.next() {
-        match arg.as_str() {
-            "watch" => set_verb(&mut verb, Verb::Watch)?,
-            "list" => set_verb(&mut verb, Verb::List)?,
-            "decode" => {
-                // a following flag is a flag, not the id
-                let id = args.next_if(|a| !a.starts_with('-'));
-                set_verb(&mut verb, Verb::Decode(id))?;
-            }
-            "--current" => set_verb(&mut verb, Verb::Puck)?,
-            "--css" => match args.next() {
-                Some(path) => css_path = Some(path),
-                None => return Err("--css takes a file argument".into()),
-            },
-            "--backend" => match args.next().as_deref() {
-                Some("cliphist") => backend = Backend::Cliphist,
-                Some("native") => backend = Backend::Native,
-                _ => return Err("--backend takes cliphist or native".into()),
-            },
-            "--help" | "-h" => return Ok(Parsed::Help),
-            other => return Err(format!("unknown argument {other}")),
-        }
+fn backend(arg: Option<BackendArg>) -> Backend {
+    match arg {
+        None => Backend::Auto,
+        Some(BackendArg::Cliphist) => Backend::Cliphist,
+        Some(BackendArg::Native) => Backend::Native,
     }
-    let verb = verb.unwrap_or(Verb::Window);
-    let wants_css = matches!(verb, Verb::Window | Verb::Puck);
-    let wants_backend = matches!(verb, Verb::Window | Verb::List | Verb::Decode(_));
-    if css_path.is_some() && !wants_css {
-        return Err("--css does not apply to this mode".into());
-    }
-    if backend != Backend::Auto && !wants_backend {
-        return Err("--backend does not apply to this mode".into());
-    }
-    Ok(Parsed::Run(Invocation {
-        verb,
-        css_path,
-        backend,
-    }))
 }
 
 fn main() -> ExitCode {
-    let Invocation {
-        verb,
-        css_path,
-        backend,
-    } = match parse(std::env::args().skip(1)) {
-        Ok(Parsed::Run(inv)) => inv,
-        Ok(Parsed::Help) => {
-            print!("{USAGE}");
-            return ExitCode::SUCCESS;
-        }
-        Err(e) => {
-            eprintln!("yankout: {e}\n{USAGE}");
-            return ExitCode::from(2);
-        }
-    };
-
-    let result = match verb {
-        Verb::Watch => {
+    let cli = Cli::parse();
+    let result = match cli.verb {
+        Some(Verb::Watch) => {
             let result = yankout_core::store::default_dir()
                 .and_then(|dir| yankout_core::watch::run(dir, yankout_core::store::DEFAULT_CAP));
             // run() only returns on failure; its loop has no clean exit
             result.map(|()| ExitCode::FAILURE)
         }
-        Verb::List => yankout_core::history::select(backend).and_then(|h| {
-            let mut out = std::io::stdout().lock();
-            yankout_core::terminal::list(h.as_ref(), &mut out).map(|()| ExitCode::SUCCESS)
-        }),
-        Verb::Decode(id) => yankout_core::history::select(backend).and_then(|h| {
-            let mut out = std::io::stdout().lock();
-            yankout_core::terminal::decode_stdin(h.as_ref(), id.as_deref(), &mut out)
-                .map(|()| ExitCode::SUCCESS)
-        }),
-        Verb::Puck | Verb::Window => {
-            let user_css = match theme::read_user_css(css_path.as_deref()) {
+        Some(Verb::List { backend: b }) => {
+            yankout_core::history::select(backend(b)).and_then(|h| {
+                let mut out = std::io::stdout().lock();
+                yankout_core::terminal::list(h.as_ref(), &mut out).map(|()| ExitCode::SUCCESS)
+            })
+        }
+        Some(Verb::Decode { id, backend: b }) => yankout_core::history::select(backend(b))
+            .and_then(|h| {
+                let mut out = std::io::stdout().lock();
+                yankout_core::terminal::decode_stdin(h.as_ref(), id.as_deref(), &mut out)
+                    .map(|()| ExitCode::SUCCESS)
+            }),
+        None => {
+            let user_css = match theme::read_user_css(cli.css.as_deref()) {
                 Ok(css) => css,
                 Err(e) => {
                     eprintln!("yankout: {e}");
                     return ExitCode::FAILURE;
                 }
             };
-            if verb == Verb::Puck {
+            if cli.current {
                 Ok(puck::run(user_css))
             } else {
-                yankout_core::history::select(backend).map(|h| list::run(user_css, h))
+                yankout_core::history::select(backend(cli.backend)).map(|h| list::run(user_css, h))
             }
         }
     };
@@ -141,81 +120,61 @@ fn main() -> ExitCode {
     }
 }
 
-const USAGE: &str = "\
-usage: yankout [--css <file>] [--backend cliphist|native]
-       yankout --current [--css <file>]
-       yankout list [--backend cliphist|native]
-       yankout decode [<id>] [--backend cliphist|native]
-       yankout watch
-  (no args)    list recent clipboard history: type to filter, Enter or
-               double-click to recall, drag anywhere on the window to
-               drag the selected entry out; closes on Esc, focus loss,
-               or a completed drop
-  --current    show a puck that drags the current clipboard out;
-               exits after a successful drop, or on Esc
-  list         print history as <id>TAB<preview> lines, newest first
-  decode       write one entry's raw content to stdout; the id is the
-               argument, or the first tab-field of the first stdin line,
-               so a picked `list` line can be piped back whole
-  watch        maintain yankout's own clipboard history via the
-               data-control protocol, replacing cliphist's watchers
-  --css <file> load this css on top of the default theme instead of
-               $XDG_CONFIG_HOME/yankout/style.css
-  --backend    history backend; the default picks native while a
-               watcher is running, else cliphist if installed
-";
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn run(args: &[&str]) -> Result<Invocation, String> {
-        match parse(args.iter().map(|a| a.to_string()))? {
-            Parsed::Run(inv) => Ok(inv),
-            Parsed::Help => panic!("help"),
-        }
+    fn parse(args: &[&str]) -> Result<Cli, clap::Error> {
+        Cli::try_parse_from(std::iter::once("yankout").chain(args.iter().copied()))
     }
 
     #[test]
     fn no_args_is_the_window() {
-        assert_eq!(run(&[]).unwrap().verb, Verb::Window);
+        let cli = parse(&[]).unwrap();
+        assert_eq!(cli.verb, None);
+        assert!(!cli.current);
     }
 
     #[test]
     fn decode_id_is_optional_and_never_a_flag() {
-        assert_eq!(
-            run(&["decode", "42"]).unwrap().verb,
-            Verb::Decode(Some("42".into()))
-        );
-        let inv = run(&["decode", "--backend", "native"]).unwrap();
-        assert_eq!(inv.verb, Verb::Decode(None));
-        assert_eq!(inv.backend, Backend::Native);
         assert!(matches!(
-            parse(["decode".to_string(), "--help".to_string()]),
-            Ok(Parsed::Help)
+            parse(&["decode", "42"]).unwrap().verb,
+            Some(Verb::Decode { id: Some(id), .. }) if id == "42"
         ));
+        assert!(matches!(
+            parse(&["decode", "--backend", "native"]).unwrap().verb,
+            Some(Verb::Decode {
+                id: None,
+                backend: Some(BackendArg::Native)
+            })
+        ));
+        assert_eq!(
+            parse(&["decode", "--help"]).unwrap_err().kind(),
+            clap::error::ErrorKind::DisplayHelp
+        );
     }
 
     #[test]
     fn two_verbs_are_rejected() {
-        assert!(run(&["watch", "--current"]).is_err());
-        assert!(run(&["list", "decode"]).is_err());
-        assert!(run(&["--current", "list"]).is_err());
+        assert!(parse(&["watch", "--current"]).is_err());
+        assert!(parse(&["list", "decode"]).is_err());
+        assert!(parse(&["--current", "list"]).is_err());
     }
 
     #[test]
     fn flags_are_scoped_to_their_modes() {
-        assert!(run(&["watch", "--css", "x.css"]).is_err());
-        assert!(run(&["list", "--css", "x.css"]).is_err());
-        assert!(run(&["--current", "--backend", "native"]).is_err());
-        assert!(run(&["--current", "--css", "x.css"]).is_ok());
-        assert!(run(&["list", "--backend", "cliphist"]).is_ok());
+        assert!(parse(&["watch", "--css", "x.css"]).is_err());
+        assert!(parse(&["list", "--css", "x.css"]).is_err());
+        assert!(parse(&["--css", "x.css", "list"]).is_err());
+        assert!(parse(&["--current", "--backend", "native"]).is_err());
+        assert!(parse(&["--current", "--css", "x.css"]).is_ok());
+        assert!(parse(&["list", "--backend", "cliphist"]).is_ok());
     }
 
     #[test]
     fn flag_arguments_are_validated() {
-        assert!(run(&["--css"]).is_err());
-        assert!(run(&["--backend", "sqlite"]).is_err());
-        assert!(run(&["--frobnicate"]).is_err());
+        assert!(parse(&["--css"]).is_err());
+        assert!(parse(&["--backend", "sqlite"]).is_err());
+        assert!(parse(&["--frobnicate"]).is_err());
     }
 }

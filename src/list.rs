@@ -2,7 +2,7 @@
 //! owns selection — type to filter, arrows to move, Enter to recall —
 //! and the whole window is the drag handle for the selected entry: a
 //! capture-phase DragSource claims press-and-pull anywhere while clean
-//! clicks fall through to the list (the M0 finding). Closes on Esc,
+//! clicks fall through to the list. Closes on Esc,
 //! focus loss, or a clean drop.
 
 use gtk4 as gtk;
@@ -83,7 +83,7 @@ fn build_list(app: &gtk::Application, backend: Rc<dyn History>, entries: &[Entry
     });
 
     // No single_click_activate: its select-on-hover would let the pointer
-    // steal the keyboard's selection (M0 finding). A plain click only
+    // steal the keyboard's selection. A plain click only
     // selects; activate is Enter or double-click.
     let list = gtk::ListView::new(Some(selection.clone()), Some(factory));
     list.add_css_class("history");

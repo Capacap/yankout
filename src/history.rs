@@ -9,6 +9,7 @@ use std::path::PathBuf;
 use std::process::Command;
 
 use crate::Error;
+use crate::interpret::human_size;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Entry {
@@ -189,7 +190,7 @@ fn preview(prefix: &[u8], total: u64) -> String {
     if let Some(mime) = crate::interpret::sniff_image(prefix) {
         return format!("[[ {mime} {} ]]", human_size(total));
     }
-    if prefix.contains(&0) {
+    if crate::interpret::prefix_looks_binary(prefix) {
         return format!("[[ binary {} ]]", human_size(total));
     }
     let text = String::from_utf8_lossy(prefix);
@@ -202,16 +203,6 @@ fn preview(prefix: &[u8], total: u64) -> String {
         collapsed.push('…');
     }
     collapsed
-}
-
-fn human_size(bytes: u64) -> String {
-    if bytes < 1024 {
-        format!("{bytes} B")
-    } else if bytes < 1024 * 1024 {
-        format!("{} KiB", bytes / 1024)
-    } else {
-        format!("{:.1} MiB", bytes as f64 / (1024.0 * 1024.0))
-    }
 }
 
 /// Test double for everything downstream of the trait.

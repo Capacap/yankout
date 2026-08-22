@@ -127,7 +127,7 @@ fn detail_text(payload: &Payload) -> String {
             truncate(text.lines().next().unwrap_or(""), 36)
         }
         Kind::Image(_) | Kind::Binary => {
-            human_size(payload.formats.first().map_or(0, |(_, b)| b.len()))
+            interpret::human_size(payload.formats.first().map_or(0, |(_, b)| b.len() as u64))
         }
     }
 }
@@ -156,14 +156,4 @@ fn truncate_keeping_tail(s: &str, max_chars: usize) -> String {
     }
     let tail: String = s.chars().skip(count - max_chars).collect();
     format!("…{tail}")
-}
-
-fn human_size(len: usize) -> String {
-    if len >= 1024 * 1024 {
-        format!("{:.1} MiB", len as f64 / (1024.0 * 1024.0))
-    } else if len >= 1024 {
-        format!("{:.0} KiB", len as f64 / 1024.0)
-    } else {
-        format!("{len} B")
-    }
 }

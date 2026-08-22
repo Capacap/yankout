@@ -9,8 +9,8 @@ pub const URI_LIST: &str = "text/uri-list";
 pub const TEXT_PLAIN: &str = "text/plain;charset=utf-8";
 pub const OCTET_STREAM: &str = "application/octet-stream";
 
-/// What an entry turned out to be. Drives type markers and the puck label,
-/// not the offered formats — those live in [`Payload::formats`].
+/// What an entry turned out to be. Drives the puck label, not the
+/// offered formats — those live in [`Payload::formats`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Kind {
     File,
@@ -42,12 +42,13 @@ pub fn interpret_with_home(content: &[u8], home: Option<&Path>) -> Payload {
         };
     }
 
-    let Ok(text) = std::str::from_utf8(content) else {
+    if looks_binary(content) {
         return Payload {
             kind: Kind::Binary,
             formats: vec![(OCTET_STREAM.to_string(), content.to_vec())],
         };
-    };
+    }
+    let text = std::str::from_utf8(content).expect("checked by looks_binary");
 
     let lines: Vec<&str> = text.trim().lines().map(str::trim).collect();
     let paths: Option<Vec<PathBuf>> = lines
@@ -110,6 +111,30 @@ fn file_uri(path: &Path) -> String {
     out
 }
 
+/// Not text: invalid UTF-8, or a NUL byte, which GDK's C-string text
+/// path would truncate at (and a debug build asserts on).
+pub fn looks_binary(content: &[u8]) -> bool {
+    content.contains(&0) || std::str::from_utf8(content).is_err()
+}
+
+/// [`looks_binary`] for the first bytes of an entry: a cut mid-character
+/// is still text, so list previews agree with drag-time classification
+/// on everything both can see.
+pub fn prefix_looks_binary(prefix: &[u8]) -> bool {
+    prefix.contains(&0)
+        || std::str::from_utf8(prefix).is_err_and(|e| e.error_len().is_some())
+}
+
+pub fn human_size(bytes: u64) -> String {
+    if bytes < 1024 {
+        format!("{bytes} B")
+    } else if bytes < 1024 * 1024 {
+        format!("{} KiB", bytes / 1024)
+    } else {
+        format!("{:.1} MiB", bytes as f64 / (1024.0 * 1024.0))
+    }
+}
+
 pub(crate) fn sniff_image(bytes: &[u8]) -> Option<&'static str> {
     if bytes.starts_with(&[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A]) {
         Some("image/png")
@@ -128,6 +153,30 @@ pub(crate) fn sniff_image(bytes: &[u8]) -> Option<&'static str> {
 mod tests {
     use super::*;
     use std::fs;
+
+    #[test]
+    fn nul_in_otherwise_valid_utf8_is_binary() {
+        assert!(looks_binary(b"foo\0bar"));
+        let payload = interpret_with_home(b"foo\0bar", None);
+        assert_eq!(payload.kind, Kind::Binary);
+        assert_eq!(payload.formats[0].0, OCTET_STREAM);
+    }
+
+    #[test]
+    fn truncated_multibyte_prefix_is_still_text() {
+        let euro = "€".as_bytes();
+        assert!(!prefix_looks_binary(&euro[..2]));
+        assert!(prefix_looks_binary(b"caf\xe9 "));
+        assert!(looks_binary(&euro[..2]));
+        assert!(looks_binary(b"caf\xe9"));
+    }
+
+    #[test]
+    fn human_size_rounds_down_in_one_place() {
+        assert_eq!(human_size(1900), "1 KiB");
+        assert_eq!(human_size(999), "999 B");
+        assert_eq!(human_size(3 * 1024 * 1024 / 2), "1.5 MiB");
+    }
 
     fn tmp() -> tempfile::TempDir {
         tempfile::tempdir().unwrap()

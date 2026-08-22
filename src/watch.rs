@@ -3,10 +3,8 @@
 //! the data-control device delivers a `selection` event on every
 //! clipboard change, and content is read through a pipe.
 //!
-//! One MIME type is stored per selection: the most faithful one a later
-//! drag can use (png beats other image encodings beats text). Offers
-//! advertising `x-kde-passwordManagerHint` are skipped entirely so
-//! password managers stay out of history.
+//! One MIME type is stored per selection, chosen by [`crate::mime::pick`];
+//! offers advertising the password-manager hint are skipped entirely.
 
 use std::collections::HashMap;
 use std::os::fd::AsFd;
@@ -39,18 +37,6 @@ const MAX_ENTRY_BYTES: usize = 64 * 1024 * 1024;
 /// selection skipped; the watcher runs on one thread, and a stall here
 /// would drop every later copy while the lock still says it is alive.
 const SOURCE_STALL: Duration = Duration::from_secs(5);
-
-const PASSWORD_HINT: &str = "x-kde-passwordManagerHint";
-
-/// Plain-text types in preference order; the legacy names are what
-/// older X-lineage apps offer instead of a MIME type.
-const TEXT_TYPES: &[&str] = &[
-    "text/plain;charset=utf-8",
-    "text/plain",
-    "UTF8_STRING",
-    "TEXT",
-    "STRING",
-];
 
 pub fn run(dir: PathBuf, cap: usize) -> Result<(), Error> {
     let writer = Writer::open(dir, cap)?;
@@ -188,7 +174,7 @@ impl State {
 }
 
 fn read_selection(conn: &Connection, offer: &Offer, mimes: &[String]) -> Result<Option<Vec<u8>>, Error> {
-    let Some(mime) = pick_mime(mimes) else {
+    let Some(mime) = crate::mime::pick(mimes.iter().map(String::as_str)) else {
         return Ok(None);
     };
     let (read_end, write_end) =
@@ -244,22 +230,6 @@ fn read_pipe(fd: impl AsFd, stall: Duration) -> Result<Vec<u8>, Error> {
             Err(e) => return Err(Error(format!("reading selection: {e}"))),
         }
     }
-}
-
-fn pick_mime(mimes: &[String]) -> Option<&str> {
-    if mimes.iter().any(|m| m == PASSWORD_HINT) {
-        return None;
-    }
-    if let Some(png) = mimes.iter().find(|m| *m == "image/png") {
-        return Some(png);
-    }
-    if let Some(image) = mimes.iter().find(|m| m.starts_with("image/")) {
-        return Some(image);
-    }
-    TEXT_TYPES
-        .iter()
-        .find(|t| mimes.iter().any(|m| m == *t))
-        .copied()
 }
 
 /// Empty selections and whitespace-only text are noise, not history.
@@ -432,37 +402,6 @@ mod tests {
         let err = read_pipe(r, Duration::from_millis(50)).unwrap_err();
         assert!(err.0.contains("stalled"), "{err}");
         drop(w);
-    }
-
-    fn mimes(list: &[&str]) -> Vec<String> {
-        list.iter().map(|s| s.to_string()).collect()
-    }
-
-    #[test]
-    fn png_beats_other_images_beats_text() {
-        let offered = mimes(&["text/plain", "image/webp", "image/png"]);
-        assert_eq!(pick_mime(&offered), Some("image/png"));
-        let offered = mimes(&["text/plain", "image/webp"]);
-        assert_eq!(pick_mime(&offered), Some("image/webp"));
-        let offered = mimes(&["text/plain", "text/plain;charset=utf-8"]);
-        assert_eq!(pick_mime(&offered), Some("text/plain;charset=utf-8"));
-    }
-
-    #[test]
-    fn legacy_text_names_are_accepted() {
-        assert_eq!(pick_mime(&mimes(&["UTF8_STRING"])), Some("UTF8_STRING"));
-    }
-
-    #[test]
-    fn password_hint_suppresses_the_whole_offer() {
-        let offered = mimes(&["text/plain", "x-kde-passwordManagerHint"]);
-        assert_eq!(pick_mime(&offered), None);
-    }
-
-    #[test]
-    fn unusable_offers_pick_nothing() {
-        assert_eq!(pick_mime(&mimes(&["application/pdf"])), None);
-        assert_eq!(pick_mime(&[]), None);
     }
 
     #[test]

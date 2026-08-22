@@ -167,6 +167,12 @@ dialog look for a single `kind  detail` row (`.puck`), styled like a
 list row. Found on the way: yazi's Ctrl-n had reverted to ripdrag
 since M3 — rebound to `wl-copy` plus `yankout --current`.
 
+Outcome (22 August 2026): shipped and validated by hand — prompt-line
+filter with type-anywhere intact, `~/.config/yankout/style.css`
+auto-loaded, the warm panel live on this machine in both modes, and
+the single-row puck confirmed from yazi's rebound Ctrl-n. Closes the
+visual-direction question from M5.
+
 ## Testing strategy
 
 The hard parts need neither a clipboard nor a drag:

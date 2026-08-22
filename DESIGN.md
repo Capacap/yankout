@@ -246,14 +246,10 @@ both modes; the native watcher grows it from there. The remaining parts
 - Entry count and window height in list mode. Ten entries? Scroll or
   hard cap?
 - Image thumbnails in rows, or text labels only?
-- Visual direction (deferred at M5 close): the user's ideal is very
-  minimalistic and TUI-like, in the spirit of their fuzzel setup —
-  flat dark panel, monospace, dim placeholder text, id column plus
-  preview per row, a single warm highlight bar for selection, no
-  visible chrome. Current default + warm.css validated but not the
-  end state. Per-row type markers were skipped at M5 (decode cost per
-  visible row, and marker meaning depends on temp-file
-  materialization below — revisit together).
+- Per-row type markers were skipped at M5 (decode cost per visible
+  row, and marker meaning depends on temp-file materialization below —
+  revisit together). The visual direction itself was settled at M7:
+  flat monospace panel, prompt-line filter, CSS as the only config.
 - Retiring cliphist on the first-deployment machine: the Mod+C fuzzel
   picker (and any terminal browsing via `cliphist list`) reads
   cliphist, so its watchers keep running beside `yankout watch` until

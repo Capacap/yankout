@@ -152,9 +152,9 @@ fn build_list(app: &gtk::Application, backend: Rc<dyn History>, entries: &[Entry
     });
 
     // drag-end fires after every drag; drag-cancel fires first on failure.
-    // Only a clean drop closes the window — a cancelled drag keeps it up.
-    // The dragging flag holds off the focus-loss close while a drag is in
-    // flight, since the drop target may take focus before drag-end lands.
+    // A clean drop closes the window; a cancelled drag keeps it up only
+    // if it still has focus, since the focus-loss notify that fired while
+    // the drag was in flight was deliberately ignored and will not repeat.
     let dragging = Rc::new(Cell::new(false));
     let cancelled = Rc::new(Cell::new(false));
     source.connect_drag_begin({
@@ -173,7 +173,7 @@ fn build_list(app: &gtk::Application, backend: Rc<dyn History>, entries: &[Entry
         let win = window.clone();
         move |_, _, _| {
             dragging.set(false);
-            if !cancelled.replace(false) {
+            if !cancelled.replace(false) || !win.is_active() {
                 win.close();
             }
         }
@@ -191,7 +191,9 @@ fn build_list(app: &gtk::Application, backend: Rc<dyn History>, entries: &[Entry
 
     // Capture phase so navigation wins over both the list and the entry;
     // everything else is forwarded to the entry and becomes filter text,
-    // whichever widget holds focus.
+    // whichever widget holds focus. With no history the entry is not in
+    // the window at all, so nothing is forwarded to it.
+    let has_entries = !entries.is_empty();
     let key = gtk::EventControllerKey::new();
     key.set_propagation_phase(gtk::PropagationPhase::Capture);
     key.connect_key_pressed({
@@ -216,7 +218,7 @@ fn build_list(app: &gtk::Application, backend: Rc<dyn History>, entries: &[Entry
                 if let Some(entry) = selected_entry(&selection) {
                     recall(backend.as_ref(), &entry, &win);
                 }
-            } else if search.has_focus() {
+            } else if !has_entries || search.has_focus() {
                 return glib::Propagation::Proceed;
             } else {
                 search.grab_focus_without_selecting();
@@ -262,7 +264,9 @@ fn build_list(app: &gtk::Application, backend: Rc<dyn History>, entries: &[Entry
     });
 
     window.present();
-    search.grab_focus();
+    if has_entries {
+        search.grab_focus();
+    }
 }
 
 fn selected_entry(selection: &gtk::SingleSelection) -> Option<Entry> {

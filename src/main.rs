@@ -87,7 +87,8 @@ usage: yankout [--current] [--css <file>] [--backend cliphist|native]
                or a completed drop
   --current    show a puck that drags the current clipboard out;
                exits after a successful drop, or on Esc
-  --css <file> load extra css on top of the default theme
+  --css <file> load this css on top of the default theme instead of
+               $XDG_CONFIG_HOME/yankout/style.css
   --backend    history backend for list mode; the default picks native
                while a watcher is running and cliphist otherwise
   watch        maintain yankout's own clipboard history via the

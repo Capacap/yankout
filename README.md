@@ -95,13 +95,12 @@ own under niri's heuristics.
 
 ## Theming
 
-The built-in default theme is neutral (monospace, no colors of its own)
-and follows the GTK theme in light and dark. Layer your own on top
-with:
-
-```sh
-yankout --css ~/.config/yankout/theme.css
-```
+The built-in default theme is neutral (monospace, flat, no colors of
+its own) and follows the GTK theme in light and dark. To layer your
+own on top, put GTK CSS in `~/.config/yankout/style.css`
+(`$XDG_CONFIG_HOME` respected); it is picked up automatically. `--css
+<file>` loads a different file instead, handy for trying a theme out.
+There is no other config file: everything customizable is CSS.
 
 [contrib/warm.css](contrib/warm.css) is a starting point. Stylable
 nodes:
@@ -109,8 +108,9 @@ nodes:
 | selector       | what it is                        |
 |----------------|-----------------------------------|
 | `window`       | both mode windows                 |
-| `.history`     | the list view; rows are `.history row` |
-| `searchentry`  | the filter field                  |
+| `.bar`         | the filter line: `.prompt` label (`>`) and `.filter` entry |
+| `.filter placeholder` | the dim "filter" hint       |
+| `.history`     | the list view; rows are `.history row`, `.history row:selected` |
 | `.empty`       | the "history empty" label         |
 | `.puck-kind`   | the puck's type line (`file`, `image/png`, …) |
 | `.puck-detail` | the puck's preview/size line      |

@@ -1,8 +1,22 @@
-/* Example --css theme: a warm terminal palette. Start here and adjust;
- * the class reference is in README.md. */
+/* Example theme: a flat warm terminal panel, fuzzel-style. Copy to
+ * ~/.config/yankout/style.css and adjust; the node reference is in
+ * README.md. */
 
 window {
     background-color: #1c1b19;
+    color: #c4b8a0;
+}
+
+.prompt {
+    color: #ef8b3a;
+}
+
+.filter {
+    color: #fce8c3;
+    caret-color: #ef8b3a;
+}
+
+.filter placeholder {
     color: #c4b8a0;
 }
 
@@ -12,12 +26,11 @@ window {
 }
 
 .history row:selected {
-    background-color: #665d52;
-    color: #fce8c3;
+    background-color: #ef8b3a;
+    color: #1c1b19;
 }
 
-searchentry {
-    background-color: #262421;
+.empty {
     color: #c4b8a0;
 }
 

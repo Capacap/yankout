@@ -88,7 +88,23 @@ fn build_list(app: &gtk::Application, backend: Rc<dyn History>, entries: &[Entry
     let list = gtk::ListView::new(Some(selection.clone()), Some(factory));
     list.add_css_class("history");
 
-    let search = gtk::SearchEntry::builder().placeholder_text("filter").build();
+    // A plain Entry, not SearchEntry: no magnifier or clear icons, so the
+    // default theme can render it as a bare prompt line.
+    let search = gtk::Entry::builder()
+        .placeholder_text("filter")
+        .hexpand(true)
+        .css_classes(["filter"])
+        .build();
+    let prompt = gtk::Label::builder()
+        .label(">")
+        .css_classes(["prompt"])
+        .build();
+    let bar = gtk::Box::builder()
+        .orientation(gtk::Orientation::Horizontal)
+        .css_classes(["bar"])
+        .build();
+    bar.append(&prompt);
+    bar.append(&search);
 
     let vbox = gtk::Box::new(gtk::Orientation::Vertical, 0);
     if entries.is_empty() {
@@ -104,7 +120,7 @@ fn build_list(app: &gtk::Application, backend: Rc<dyn History>, entries: &[Entry
             .vexpand(true)
             .child(&list)
             .build();
-        vbox.append(&search);
+        vbox.append(&bar);
         vbox.append(&scroller);
     }
 
@@ -173,8 +189,9 @@ fn build_list(app: &gtk::Application, backend: Rc<dyn History>, entries: &[Entry
         }
     });
 
-    // Capture phase so navigation wins over both the list and the search
-    // entry; everything else proceeds and becomes filter text.
+    // Capture phase so navigation wins over both the list and the entry;
+    // everything else is forwarded to the entry and becomes filter text,
+    // whichever widget holds focus.
     let key = gtk::EventControllerKey::new();
     key.set_propagation_phase(gtk::PropagationPhase::Capture);
     key.connect_key_pressed({
@@ -182,7 +199,8 @@ fn build_list(app: &gtk::Application, backend: Rc<dyn History>, entries: &[Entry
         let selection = selection.clone();
         let list = list.clone();
         let backend = backend.clone();
-        move |_, keyval, _, state| {
+        let search = search.clone();
+        move |controller, keyval, _, state| {
             let ctrl = state.contains(gdk::ModifierType::CONTROL_MASK);
             if keyval == gdk::Key::Escape {
                 win.close();
@@ -198,16 +216,20 @@ fn build_list(app: &gtk::Application, backend: Rc<dyn History>, entries: &[Entry
                 if let Some(entry) = selected_entry(&selection) {
                     recall(backend.as_ref(), &entry, &win);
                 }
-            } else {
+            } else if search.has_focus() {
                 return glib::Propagation::Proceed;
+            } else {
+                search.grab_focus_without_selecting();
+                return match controller.forward(&search) {
+                    true => glib::Propagation::Stop,
+                    false => glib::Propagation::Proceed,
+                };
             }
             glib::Propagation::Stop
         }
     });
     window.add_controller(key);
 
-    // Typing filters no matter which widget has focus.
-    search.set_key_capture_widget(Some(&window));
     search.connect_changed({
         let query = query.clone();
         let selection = selection.clone();

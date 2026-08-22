@@ -190,10 +190,12 @@ The window is a plain xdg toplevel. No layer-shell, no
 compositor-specific protocols in the UI path; tiling compositors float
 and place it by user rule (placement rules ship as documented examples,
 starting with niri), stacking desktops treat it as the small utility
-window it is. Styling ships with a neutral default theme plus a `--css
-<file>` flag so any deployment can match its desktop without wrapper
+window it is. Styling ships with a neutral flat default theme plus one user
+CSS layer — `$XDG_CONFIG_HOME/yankout/style.css`, or `--css <file>` to
+override — so any deployment can match its desktop without wrapper
 hacks (the flag exists because retrofitting exactly this onto ripdrag
-required a scoped `XDG_CONFIG_HOME` workaround).
+required a scoped `XDG_CONFIG_HOME` workaround). CSS is the only
+config surface; a second format would be two files for one app.
 
 ## Relation to ripdrag
 

@@ -153,6 +153,17 @@ fallback exercised once by hand (`--backend cliphist`, or with the
 watcher stopped). Automated drag e2e rig only if regressions ever
 justify it.
 
+## M7 — Look and config
+
+The visual direction deferred at M5: the filter becomes a bare `> `
+prompt line (a plain Entry, no SearchEntry chrome; stray keystrokes
+forwarded to it from the window's capture-phase key controller), the
+default theme goes flat, and the user layer moves from the keybinding
+into `$XDG_CONFIG_HOME/yankout/style.css`, auto-loaded with `--css` as
+the explicit override. CSS is the whole config surface — no second
+format until a non-CSS knob actually needs persisting. `contrib/warm.css`
+redone as the fuzzel-style panel.
+
 ## Testing strategy
 
 The hard parts need neither a clipboard nor a drag:

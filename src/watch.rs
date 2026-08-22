@@ -9,10 +9,11 @@
 //! password managers stay out of history.
 
 use std::collections::HashMap;
-use std::fs::File;
-use std::io::Read;
 use std::os::fd::AsFd;
 use std::path::PathBuf;
+use std::time::{Duration, Instant};
+
+use rustix::event::{PollFd, PollFlags};
 
 use wayland_client::protocol::{wl_registry, wl_seat::WlSeat};
 use wayland_client::{Connection, Dispatch, Proxy, QueueHandle, backend::ObjectId, event_created_child};
@@ -33,6 +34,11 @@ use crate::store::Writer;
 /// Sanity cap on a single entry; a source offering more than this is
 /// broken or hostile, and 750 such entries would fill a disk.
 const MAX_ENTRY_BYTES: usize = 64 * 1024 * 1024;
+
+/// A source that stops writing for this long is treated as hung and its
+/// selection skipped; the watcher runs on one thread, and a stall here
+/// would drop every later copy while the lock still says it is alive.
+const SOURCE_STALL: Duration = Duration::from_secs(5);
 
 const PASSWORD_HINT: &str = "x-kde-passwordManagerHint";
 
@@ -194,28 +200,49 @@ fn read_selection(conn: &Connection, offer: &Offer, mimes: &[String]) -> Result<
     conn.flush()
         .map_err(|e| Error(format!("flushing receive request: {e}")))?;
 
-    // Synchronous read: a frozen source stalls the watcher until it
-    // recovers, which beats the complexity of timeouts for a clipboard.
+    let content = read_pipe(read_end, SOURCE_STALL)?;
+    if worth_storing(mime, &content) {
+        Ok(Some(content))
+    } else {
+        Ok(None)
+    }
+}
+
+/// Drain a pipe to EOF, giving up if the writer goes quiet for `stall`.
+fn read_pipe(fd: impl AsFd, stall: Duration) -> Result<Vec<u8>, Error> {
     let mut content = Vec::new();
-    let mut pipe = File::from(read_end);
     let mut buf = [0u8; 64 * 1024];
     loop {
-        match pipe.read(&mut buf) {
-            Ok(0) => break,
+        let deadline = Instant::now() + stall;
+        loop {
+            let left = deadline.saturating_duration_since(Instant::now());
+            if left.is_zero() {
+                return Err(Error(format!(
+                    "source stalled for {:?}, selection skipped",
+                    stall
+                )));
+            }
+            let mut fds = [PollFd::new(&fd, PollFlags::IN)];
+            let timeout = rustix::event::Timespec::try_from(left)
+                .map_err(|_| Error("poll timeout out of range".into()))?;
+            match rustix::event::poll(&mut fds, Some(&timeout)) {
+                Ok(0) => continue,
+                Ok(_) => break,
+                Err(rustix::io::Errno::INTR) => continue,
+                Err(e) => return Err(Error(format!("waiting for selection: {e}"))),
+            }
+        }
+        match rustix::io::read(&fd, &mut buf) {
+            Ok(0) => return Ok(content),
             Ok(n) => {
                 content.extend_from_slice(&buf[..n]);
                 if content.len() > MAX_ENTRY_BYTES {
                     return Err(Error(format!("selection exceeds {MAX_ENTRY_BYTES} bytes, skipped")));
                 }
             }
-            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(rustix::io::Errno::INTR) => continue,
             Err(e) => return Err(Error(format!("reading selection: {e}"))),
         }
-    }
-    if worth_storing(mime, &content) {
-        Ok(Some(content))
-    } else {
-        Ok(None)
     }
 }
 
@@ -389,6 +416,23 @@ impl Dispatch<ZwlrDataControlOfferV1, ()> for State {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn read_pipe_drains_to_eof() {
+        let (r, w) = rustix::pipe::pipe().unwrap();
+        rustix::io::write(&w, b"hello").unwrap();
+        drop(w);
+        assert_eq!(read_pipe(r, Duration::from_secs(1)).unwrap(), b"hello");
+    }
+
+    #[test]
+    fn read_pipe_gives_up_on_a_silent_writer() {
+        let (r, w) = rustix::pipe::pipe().unwrap();
+        rustix::io::write(&w, b"partial").unwrap();
+        let err = read_pipe(r, Duration::from_millis(50)).unwrap_err();
+        assert!(err.0.contains("stalled"), "{err}");
+        drop(w);
+    }
 
     fn mimes(list: &[&str]) -> Vec<String> {
         list.iter().map(|s| s.to_string()).collect()

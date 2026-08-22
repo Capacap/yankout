@@ -36,11 +36,15 @@ pub fn default_dir() -> Result<PathBuf, Error> {
 /// Whether a `Writer` currently holds the store's lock. This is the
 /// signal list mode uses to prefer the native backend: history is only
 /// trustworthy while something is feeding it.
+///
+/// The probe takes a shared lock: it conflicts with the writer's
+/// exclusive one (so detection works) but not with a writer opening at
+/// the same instant, which an exclusive probe would knock out.
 pub fn watcher_active(dir: &Path) -> bool {
     let Ok(file) = File::open(dir.join(LOCK_FILE)) else {
         return false;
     };
-    match rustix::fs::flock(&file, FlockOperation::NonBlockingLockExclusive) {
+    match rustix::fs::flock(&file, FlockOperation::NonBlockingLockShared) {
         Ok(()) => {
             let _ = rustix::fs::flock(&file, FlockOperation::Unlock);
             false
@@ -68,9 +72,19 @@ impl Store {
                 return Err(Error(format!("reading store {}: {e}", self.dir.display())));
             }
         };
-        // Anything non-numeric (the lock file, temp files) is not an entry.
+        // Only regular files named exactly as this store writes them are
+        // entries; the lock file, temp files and anything dropped in by
+        // hand are skipped rather than tripping every later read.
         let mut seqs: Vec<u64> = entries
-            .filter_map(|entry| entry.ok()?.file_name().to_str()?.parse().ok())
+            .filter_map(|entry| {
+                let entry = entry.ok()?;
+                if !entry.file_type().ok()?.is_file() {
+                    return None;
+                }
+                let name = entry.file_name();
+                let seq: u64 = name.to_str()?.parse().ok()?;
+                (name == format!("{seq:020}").as_str()).then_some(seq)
+            })
             .collect();
         seqs.sort_unstable_by(|a, b| b.cmp(a));
         Ok(seqs)
@@ -114,7 +128,11 @@ fn key_of(content: &[u8]) -> Key {
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Stored {
     New(u64),
+    /// A duplicate promoted to the front under a fresh sequence number.
     Bumped(u64),
+    /// A duplicate that was already the newest entry; nothing moved, so
+    /// ids handed out earlier stay valid.
+    Unchanged(u64),
 }
 
 pub struct Writer {
@@ -143,13 +161,21 @@ impl Writer {
 
         let mut by_key = HashMap::new();
         let mut by_seq = BTreeMap::new();
-        for seq in store.list()? {
-            let key = key_of(&store.read(seq)?);
+        let seqs = store.list()?;
+        // the sequence continues past every name on disk, readable or
+        // not, so a fresh write can never land on an existing file
+        let next_seq = seqs.first().map_or(0, |s| s + 1);
+        for seq in seqs {
+            // an unreadable entry stays on disk untouched and out of the
+            // index: it neither dedups nor counts toward the cap
+            let Ok(content) = store.read(seq) else {
+                continue;
+            };
+            let key = key_of(&content);
             by_seq.insert(seq, key);
             // list() is newest first; a duplicate key keeps its newest seq
             by_key.entry(key).or_insert(seq);
         }
-        let next_seq = by_seq.last_key_value().map_or(0, |(s, _)| s + 1);
         Ok(Writer {
             store,
             _lock: lock,
@@ -168,6 +194,9 @@ impl Writer {
             // (someone cleared the directory by hand); drop the stale
             // index row and store fresh.
             let matches = self.store.read(old_seq).is_ok_and(|old| old == content);
+            if matches && self.by_seq.last_key_value().map(|(s, _)| *s) == Some(old_seq) {
+                return Ok(Stored::Unchanged(old_seq));
+            }
             if matches {
                 let seq = self.take_seq();
                 if fs::rename(self.store.path(old_seq), self.store.path(seq)).is_ok() {
@@ -218,7 +247,7 @@ impl Writer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::os::unix::fs::MetadataExt;
+    use std::os::unix::fs::{MetadataExt, PermissionsExt};
 
     fn writer(dir: &Path) -> Writer {
         Writer::open(dir, DEFAULT_CAP).unwrap()
@@ -250,6 +279,18 @@ mod tests {
         assert_eq!(store.read(2).unwrap(), b"payload");
         // same inode: the data was moved, not rewritten
         assert_eq!(fs::metadata(store.path(2)).unwrap().ino(), inode_before);
+    }
+
+    #[test]
+    fn newest_entry_repeated_keeps_its_id() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut w = writer(dir.path());
+        w.store(b"older").unwrap();
+        w.store(b"payload").unwrap();
+        assert_eq!(w.store(b"payload").unwrap(), Stored::Unchanged(1));
+        let store = Store::open(dir.path());
+        assert_eq!(store.list().unwrap(), vec![1, 0]);
+        assert_eq!(store.read(1).unwrap(), b"payload");
     }
 
     #[test]
@@ -291,6 +332,40 @@ mod tests {
         w.store(b"real").unwrap();
         fs::write(dir.path().join(".tmp-junk"), b"torn").unwrap();
         assert_eq!(Store::open(dir.path()).list().unwrap(), vec![0]);
+    }
+
+    #[test]
+    fn junk_in_directory_is_ignored_by_reader_and_writer() {
+        let dir = tempfile::tempdir().unwrap();
+        {
+            let mut w = writer(dir.path());
+            w.store(b"real").unwrap();
+        }
+        fs::create_dir(dir.path().join(format!("{:020}", 7))).unwrap();
+        fs::write(dir.path().join("5"), b"unpadded").unwrap();
+        fs::write(dir.path().join("+3"), b"signed").unwrap();
+        let unreadable = dir.path().join(format!("{:020}", 9));
+        fs::write(&unreadable, b"secret").unwrap();
+        fs::set_permissions(&unreadable, fs::Permissions::from_mode(0o000)).unwrap();
+        assert_eq!(Store::open(dir.path()).list().unwrap(), vec![9, 0]);
+        // the writer reopens over the junk and continues past every name
+        let mut w = writer(dir.path());
+        assert_eq!(w.store(b"next").unwrap(), Stored::New(10));
+        assert_eq!(fs::metadata(&unreadable).unwrap().len(), 6);
+    }
+
+    #[test]
+    fn watcher_probe_does_not_block_a_starting_writer() {
+        let dir = tempfile::tempdir().unwrap();
+        {
+            let _w = writer(dir.path());
+        }
+        // hold a probe-style shared lock while a writer opens
+        let file = File::open(dir.path().join(LOCK_FILE)).unwrap();
+        rustix::fs::flock(&file, FlockOperation::NonBlockingLockShared).unwrap();
+        assert!(Writer::open(dir.path(), DEFAULT_CAP).is_err());
+        rustix::fs::flock(&file, FlockOperation::Unlock).unwrap();
+        assert!(Writer::open(dir.path(), DEFAULT_CAP).is_ok());
     }
 
     #[test]

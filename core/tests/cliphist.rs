@@ -5,8 +5,8 @@
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
-use yankout::history::{Cliphist, History};
-use yankout::interpret::{Kind, interpret_with_home};
+use yankout_core::history::{Cliphist, History};
+use yankout_core::interpret::{Kind, interpret_with_home};
 
 // A valid 1x1 PNG: cliphist only produces its "[[ binary data ... ]]"
 // preview when it can fully parse the image, so a bare magic-number

@@ -1,14 +1,12 @@
+[workspace]
+members = ["core"]
+
 [package]
 name = "yankout"
 version = "0.1.0"
 edition = "2024"
+description = "Wayland clipboard picker whose entries leave by drag"
 
 [dependencies]
+yankout-core = { path = "core" }
 gtk4 = { version = "0.11", features = ["v4_12"] }
-rustix = { version = "1", features = ["event", "fs", "pipe"] }
-wayland-client = "0.31"
-wayland-protocols = { version = "0.32", features = ["client", "staging"] }
-wayland-protocols-wlr = { version = "0.3", features = ["client"] }
-
-[dev-dependencies]
-tempfile = "3"

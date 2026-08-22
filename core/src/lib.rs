@@ -2,7 +2,6 @@ pub mod clipboard;
 pub mod history;
 pub mod interpret;
 pub mod mime;
-pub mod provider;
 pub mod store;
 pub mod terminal;
 pub mod watch;

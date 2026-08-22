@@ -12,8 +12,10 @@ use std::rc::Rc;
 use gtk::prelude::*;
 use gtk::{gdk, glib};
 
-use yankout::interpret::{self, Kind, Payload};
-use yankout::{clipboard, provider};
+use yankout_core::clipboard;
+use yankout_core::interpret::{self, Kind, Payload};
+
+use crate::provider;
 
 pub fn run(user_css: Option<String>) -> ExitCode {
     let content = match clipboard::read() {

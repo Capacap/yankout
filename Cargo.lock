@@ -848,6 +848,13 @@ name = "yankout"
 version = "0.1.0"
 dependencies = [
  "gtk4",
+ "yankout-core",
+]
+
+[[package]]
+name = "yankout-core"
+version = "0.1.0"
+dependencies = [
  "rustix",
  "tempfile",
  "wayland-client",

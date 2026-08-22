@@ -1,10 +1,11 @@
 mod list;
+mod provider;
 mod puck;
 mod theme;
 
 use std::process::ExitCode;
 
-use yankout::history::Backend;
+use yankout_core::history::Backend;
 
 #[derive(Debug, PartialEq, Eq)]
 enum Verb {
@@ -102,18 +103,18 @@ fn main() -> ExitCode {
 
     let result = match verb {
         Verb::Watch => {
-            let result = yankout::store::default_dir()
-                .and_then(|dir| yankout::watch::run(dir, yankout::store::DEFAULT_CAP));
+            let result = yankout_core::store::default_dir()
+                .and_then(|dir| yankout_core::watch::run(dir, yankout_core::store::DEFAULT_CAP));
             // run() only returns on failure; its loop has no clean exit
             result.map(|()| ExitCode::FAILURE)
         }
-        Verb::List => yankout::history::select(backend).and_then(|h| {
+        Verb::List => yankout_core::history::select(backend).and_then(|h| {
             let mut out = std::io::stdout().lock();
-            yankout::terminal::list(h.as_ref(), &mut out).map(|()| ExitCode::SUCCESS)
+            yankout_core::terminal::list(h.as_ref(), &mut out).map(|()| ExitCode::SUCCESS)
         }),
-        Verb::Decode(id) => yankout::history::select(backend).and_then(|h| {
+        Verb::Decode(id) => yankout_core::history::select(backend).and_then(|h| {
             let mut out = std::io::stdout().lock();
-            yankout::terminal::decode_stdin(h.as_ref(), id.as_deref(), &mut out)
+            yankout_core::terminal::decode_stdin(h.as_ref(), id.as_deref(), &mut out)
                 .map(|()| ExitCode::SUCCESS)
         }),
         Verb::Puck | Verb::Window => {
@@ -127,7 +128,7 @@ fn main() -> ExitCode {
             if verb == Verb::Puck {
                 Ok(puck::run(user_css))
             } else {
-                yankout::history::select(backend).map(|h| list::run(user_css, h))
+                yankout_core::history::select(backend).map(|h| list::run(user_css, h))
             }
         }
     };

@@ -14,8 +14,10 @@ use std::rc::Rc;
 use gtk::prelude::*;
 use gtk::{gdk, gio, glib, pango};
 
-use yankout::history::{Entry, History};
-use yankout::{clipboard, interpret, provider};
+use yankout_core::history::{Entry, History};
+use yankout_core::{clipboard, interpret};
+
+use crate::provider;
 
 pub fn run(user_css: Option<String>, backend: Box<dyn History>) -> ExitCode {
     let backend: Rc<dyn History> = Rc::from(backend);

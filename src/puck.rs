@@ -51,23 +51,20 @@ fn build_puck(app: &gtk::Application, payload: &Payload) {
         .css_classes(["puck-detail"])
         .build();
 
-    let vbox = gtk::Box::builder()
-        .orientation(gtk::Orientation::Vertical)
-        .spacing(4)
-        .margin_top(14)
-        .margin_bottom(14)
-        .margin_start(18)
-        .margin_end(18)
-        .valign(gtk::Align::Center)
+    // One line, like a list row: `kind  detail`.
+    let row = gtk::Box::builder()
+        .orientation(gtk::Orientation::Horizontal)
+        .spacing(12)
+        .css_classes(["puck"])
         .build();
-    vbox.append(&kind_label);
-    vbox.append(&detail_label);
+    row.append(&kind_label);
+    row.append(&detail_label);
 
     let window = gtk::ApplicationWindow::builder()
         .application(app)
         .title("yankout")
         .resizable(false)
-        .child(&vbox)
+        .child(&row)
         .build();
 
     let source = gtk::DragSource::new();

@@ -112,5 +112,4 @@ nodes:
 | `.filter placeholder` | the dim "filter" hint       |
 | `.history`     | the list view; rows are `.history row`, `.history row:selected` |
 | `.empty`       | the "history empty" label         |
-| `.puck-kind`   | the puck's type line (`file`, `image/png`, …) |
-| `.puck-detail` | the puck's preview/size line      |
+| `.puck`        | the puck's single row: `.puck-kind` marker (`file`, `image/png`, …) and `.puck-detail` text |

@@ -162,7 +162,10 @@ default theme goes flat, and the user layer moves from the keybinding
 into `$XDG_CONFIG_HOME/yankout/style.css`, auto-loaded with `--css` as
 the explicit override. CSS is the whole config surface — no second
 format until a non-CSS knob actually needs persisting. `contrib/warm.css`
-redone as the fuzzel-style panel.
+redone as the fuzzel-style panel. The puck drops its centred two-line
+dialog look for a single `kind  detail` row (`.puck`), styled like a
+list row. Found on the way: yazi's Ctrl-n had reverted to ripdrag
+since M3 — rebound to `wl-copy` plus `yankout --current`.
 
 ## Testing strategy
 

@@ -38,6 +38,10 @@
     opacity: 0.45;
 }
 
+.puck {
+    padding: 10px 14px;
+}
+
 .puck-kind {
     font-family: monospace;
     font-weight: bold;
@@ -45,6 +49,5 @@
 
 .puck-detail {
     font-family: monospace;
-    font-size: 0.85em;
     opacity: 0.7;
 }

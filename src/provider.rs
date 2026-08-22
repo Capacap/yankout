@@ -1,11 +1,11 @@
-//! The thin GTK adapter over [`yankout_core::interpret::Payload`]: everything
+//! The thin GTK adapter over [`yankout_core::payload::Payload`]: everything
 //! interesting about a payload is decided and byte-assembled in pure code;
 //! this only wraps it for GDK.
 
 use gtk4::glib::value::ToValue as _;
 use gtk4::{gdk, glib};
 
-use yankout_core::interpret::{Payload, TEXT_PLAIN};
+use yankout_core::payload::{Payload, TEXT_PLAIN};
 
 pub fn content_provider(payload: &Payload) -> gdk::ContentProvider {
     let providers: Vec<gdk::ContentProvider> = payload

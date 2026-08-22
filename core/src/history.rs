@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use std::process::Command;
 
 use crate::Error;
-use crate::interpret::human_size;
+use crate::payload::human_size;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Entry {
@@ -188,10 +188,10 @@ impl History for Native {
 }
 
 fn preview(prefix: &[u8], total: u64) -> String {
-    if let Some(mime) = crate::interpret::sniff_image(prefix) {
+    if let Some(mime) = crate::payload::sniff_image(prefix) {
         return format!("[[ {mime} {} ]]", human_size(total));
     }
-    if crate::interpret::prefix_looks_binary(prefix) {
+    if crate::payload::prefix_looks_binary(prefix) {
         return format!("[[ binary {} ]]", human_size(total));
     }
     let text = String::from_utf8_lossy(prefix);

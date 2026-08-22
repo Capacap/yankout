@@ -13,7 +13,7 @@ use gtk::prelude::*;
 use gtk::{gdk, glib};
 
 use yankout_core::clipboard;
-use yankout_core::interpret::{self, Kind, Payload};
+use yankout_core::payload::{self, Kind, Payload};
 
 use crate::provider;
 
@@ -25,7 +25,7 @@ pub fn run(user_css: Option<String>) -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    let payload = interpret::interpret(&content);
+    let payload = payload::classify(&content);
 
     // Modes get distinct application ids: under a shared id GApplication
     // uniqueness would make a `yankout` launch re-present an open puck
@@ -129,7 +129,7 @@ fn detail_text(payload: &Payload) -> String {
             truncate(text.lines().next().unwrap_or(""), 36)
         }
         Kind::Image(_) | Kind::Binary => {
-            interpret::human_size(payload.formats.first().map_or(0, |(_, b)| b.len() as u64))
+            payload::human_size(payload.formats.first().map_or(0, |(_, b)| b.len() as u64))
         }
     }
 }
@@ -138,7 +138,7 @@ fn payload_text(payload: &Payload) -> String {
     payload
         .formats
         .iter()
-        .find(|(mime, _)| mime == interpret::TEXT_PLAIN)
+        .find(|(mime, _)| mime == payload::TEXT_PLAIN)
         .map(|(_, bytes)| String::from_utf8_lossy(bytes).into_owned())
         .unwrap_or_default()
 }

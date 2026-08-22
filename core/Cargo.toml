@@ -1,7 +1,8 @@
 [package]
 name = "yankout-core"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
 description = "Clipboard history store, watcher and drag-payload classification for yankout"
 
 [dependencies]

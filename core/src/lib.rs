@@ -1,7 +1,7 @@
 pub mod clipboard;
 pub mod history;
-pub mod interpret;
 pub mod mime;
+pub mod payload;
 pub mod store;
 pub mod terminal;
 pub mod watch;

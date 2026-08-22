@@ -28,13 +28,13 @@ pub struct Payload {
     pub formats: Vec<(String, Vec<u8>)>,
 }
 
-pub fn interpret(content: &[u8]) -> Payload {
+pub fn classify(content: &[u8]) -> Payload {
     let home = std::env::var_os("HOME").map(PathBuf::from);
-    interpret_with_home(content, home.as_deref())
+    classify_with_home(content, home.as_deref())
 }
 
 /// `home` backs `~` expansion; injectable so tests control the filesystem.
-pub fn interpret_with_home(content: &[u8], home: Option<&Path>) -> Payload {
+pub fn classify_with_home(content: &[u8], home: Option<&Path>) -> Payload {
     if let Some(mime) = sniff_image(content) {
         return Payload {
             kind: Kind::Image(mime),
@@ -156,7 +156,7 @@ mod tests {
     #[test]
     fn nul_in_otherwise_valid_utf8_is_binary() {
         assert!(looks_binary(b"foo\0bar"));
-        let payload = interpret_with_home(b"foo\0bar", None);
+        let payload = classify_with_home(b"foo\0bar", None);
         assert_eq!(payload.kind, Kind::Binary);
         assert_eq!(payload.formats[0].0, OCTET_STREAM);
     }
@@ -195,7 +195,7 @@ mod tests {
         let file = dir.path().join("report.pdf");
         fs::write(&file, b"x").unwrap();
 
-        let p = interpret_with_home(file.to_str().unwrap().as_bytes(), None);
+        let p = classify_with_home(file.to_str().unwrap().as_bytes(), None);
         assert_eq!(p.kind, Kind::File);
         assert_eq!(mimes(&p), vec![URI_LIST, TEXT_PLAIN]);
         assert_eq!(
@@ -212,7 +212,7 @@ mod tests {
         fs::write(&file, b"x").unwrap();
 
         let entry = format!("  {}\n", file.display());
-        let p = interpret_with_home(entry.as_bytes(), None);
+        let p = classify_with_home(entry.as_bytes(), None);
         assert_eq!(p.kind, Kind::File);
         // the text/plain side carries the trimmed path string
         assert_eq!(bytes_for(&p, TEXT_PLAIN), file.to_str().unwrap().as_bytes());
@@ -224,7 +224,7 @@ mod tests {
         let file = dir.path().join("my report v2.pdf");
         fs::write(&file, b"x").unwrap();
 
-        let p = interpret_with_home(file.to_str().unwrap().as_bytes(), None);
+        let p = classify_with_home(file.to_str().unwrap().as_bytes(), None);
         let uri = String::from_utf8(bytes_for(&p, URI_LIST).to_vec()).unwrap();
         assert!(uri.contains("my%20report%20v2.pdf"), "got: {uri}");
         assert!(!uri.contains(' '));
@@ -235,7 +235,7 @@ mod tests {
         let home = tmp();
         fs::write(home.path().join("notes.txt"), b"x").unwrap();
 
-        let p = interpret_with_home(b"~/notes.txt", Some(home.path()));
+        let p = classify_with_home(b"~/notes.txt", Some(home.path()));
         assert_eq!(p.kind, Kind::File);
         let uri = String::from_utf8(bytes_for(&p, URI_LIST).to_vec()).unwrap();
         assert!(uri.contains("notes.txt"));
@@ -245,7 +245,7 @@ mod tests {
     #[test]
     fn bare_tilde_is_home_directory() {
         let home = tmp();
-        let p = interpret_with_home(b"~", Some(home.path()));
+        let p = classify_with_home(b"~", Some(home.path()));
         assert_eq!(p.kind, Kind::File);
     }
 
@@ -253,21 +253,21 @@ mod tests {
     fn relative_path_stays_text_even_if_it_exists() {
         // "src" exists relative to the test cwd (project root); still text.
         assert!(Path::new("src").exists());
-        let p = interpret_with_home(b"src", None);
+        let p = classify_with_home(b"src", None);
         assert_eq!(p.kind, Kind::Text);
         assert_eq!(mimes(&p), vec![TEXT_PLAIN]);
     }
 
     #[test]
     fn nonexistent_absolute_path_degrades_to_text() {
-        let p = interpret_with_home(b"/no/such/file/anywhere.txt", None);
+        let p = classify_with_home(b"/no/such/file/anywhere.txt", None);
         assert_eq!(p.kind, Kind::Text);
     }
 
     #[test]
     fn directory_counts_as_a_file_drop() {
         let dir = tmp();
-        let p = interpret_with_home(dir.path().to_str().unwrap().as_bytes(), None);
+        let p = classify_with_home(dir.path().to_str().unwrap().as_bytes(), None);
         assert_eq!(p.kind, Kind::File);
     }
 
@@ -280,7 +280,7 @@ mod tests {
         fs::write(&b, b"x").unwrap();
 
         let entry = format!("{}\n{}", a.display(), b.display());
-        let p = interpret_with_home(entry.as_bytes(), None);
+        let p = classify_with_home(entry.as_bytes(), None);
         assert_eq!(p.kind, Kind::Files(2));
         let uri = String::from_utf8(bytes_for(&p, URI_LIST).to_vec()).unwrap();
         assert_eq!(uri.matches("\r\n").count(), 2);
@@ -294,7 +294,7 @@ mod tests {
         fs::write(&a, b"x").unwrap();
 
         let entry = format!("{}\n/no/such/file.txt", a.display());
-        let p = interpret_with_home(entry.as_bytes(), None);
+        let p = classify_with_home(entry.as_bytes(), None);
         assert_eq!(p.kind, Kind::Text);
     }
 
@@ -305,7 +305,7 @@ mod tests {
         fs::write(&a, b"x").unwrap();
 
         let entry = format!("{}\n\n{}", a.display(), a.display());
-        let p = interpret_with_home(entry.as_bytes(), None);
+        let p = classify_with_home(entry.as_bytes(), None);
         assert_eq!(p.kind, Kind::Text);
     }
 
@@ -318,14 +318,14 @@ mod tests {
         fs::write(&b, b"x").unwrap();
 
         let entry = format!("{}\r\n{}\r\n", a.display(), b.display());
-        let p = interpret_with_home(entry.as_bytes(), None);
+        let p = classify_with_home(entry.as_bytes(), None);
         assert_eq!(p.kind, Kind::Files(2));
     }
 
     #[test]
     fn png_is_sniffed_not_assumed() {
         let png = [0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A, 1, 2, 3];
-        let p = interpret_with_home(&png, None);
+        let p = classify_with_home(&png, None);
         assert_eq!(p.kind, Kind::Image("image/png"));
         assert_eq!(mimes(&p), vec!["image/png"]);
         assert_eq!(bytes_for(&p, "image/png"), &png);
@@ -334,28 +334,28 @@ mod tests {
     #[test]
     fn jpeg_gets_its_real_mime() {
         let jpg = [0xFF, 0xD8, 0xFF, 0xE0, 0, 0];
-        let p = interpret_with_home(&jpg, None);
+        let p = classify_with_home(&jpg, None);
         assert_eq!(p.kind, Kind::Image("image/jpeg"));
     }
 
     #[test]
     fn unrecognized_binary_is_octet_stream() {
         let junk = [0x00, 0xFF, 0xFE, 0x00, 0x80];
-        let p = interpret_with_home(&junk, None);
+        let p = classify_with_home(&junk, None);
         assert_eq!(p.kind, Kind::Binary);
         assert_eq!(mimes(&p), vec![OCTET_STREAM]);
     }
 
     #[test]
     fn ordinary_prose_is_text() {
-        let p = interpret_with_home("just some copied words".as_bytes(), None);
+        let p = classify_with_home("just some copied words".as_bytes(), None);
         assert_eq!(p.kind, Kind::Text);
         assert_eq!(bytes_for(&p, TEXT_PLAIN), b"just some copied words");
     }
 
     #[test]
     fn whitespace_only_entry_is_text() {
-        let p = interpret_with_home(b"   \n  ", None);
+        let p = classify_with_home(b"   \n  ", None);
         assert_eq!(p.kind, Kind::Text);
     }
 
@@ -365,7 +365,7 @@ mod tests {
         let file = dir.path().join("café.txt");
         fs::write(&file, b"x").unwrap();
 
-        let p = interpret_with_home(file.to_str().unwrap().as_bytes(), None);
+        let p = classify_with_home(file.to_str().unwrap().as_bytes(), None);
         assert_eq!(p.kind, Kind::File);
         let uri = String::from_utf8(bytes_for(&p, URI_LIST).to_vec()).unwrap();
         assert!(uri.contains("caf%C3%A9.txt"), "got: {uri}");

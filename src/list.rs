@@ -15,7 +15,7 @@ use gtk::prelude::*;
 use gtk::{gdk, gio, glib, pango};
 
 use yankout_core::history::{Entry, History};
-use yankout_core::{clipboard, interpret};
+use yankout_core::{clipboard, payload};
 
 use crate::provider;
 use crate::row::Row;
@@ -126,7 +126,7 @@ fn build_list(app: &gtk::Application, backend: Rc<dyn History>, entries: &[Entry
         move |_, _, _| {
             let entry = selected_entry(&selection)?;
             match backend.content(&entry.id) {
-                Ok(content) => Some(provider::content_provider(&interpret::interpret(&content))),
+                Ok(content) => Some(provider::content_provider(&payload::classify(&content))),
                 Err(e) => {
                     eprintln!("yankout: {e}");
                     None

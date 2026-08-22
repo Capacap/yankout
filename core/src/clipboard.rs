@@ -1,6 +1,10 @@
-//! Live clipboard access via wl-clipboard. Deliberately not part of the
-//! History trait: history is fed by a watcher, and a puck reading history
-//! (`wl-copy && yankout --current`) would race the watcher's ingest.
+//! Live clipboard access via wl-clipboard rather than GDK's clipboard:
+//! a Wayland selection dies with the client that owns it, and the list
+//! window closes right after a recall, so the bytes need an owner that
+//! outlives this process — wl-copy forks one. Deliberately not part of
+//! the History trait: history is fed by a watcher, and a puck reading
+//! history (`wl-copy && yankout --current`) would race the watcher's
+//! ingest.
 
 use std::io::Write as _;
 use std::process::{Command, Stdio};

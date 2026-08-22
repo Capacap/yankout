@@ -1,6 +1,7 @@
 //! Integration tests for the cliphist backend against a scratch database
-//! (cliphist's -db-path flag). Requires the cliphist binary on PATH; the
-//! live clipboard and the real database are never touched.
+//! (cliphist's -db-path flag). The tests that drive the real binary skip
+//! themselves where it is not on PATH (CI); the live clipboard and the
+//! real database are never touched.
 
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
@@ -19,10 +20,15 @@ const PNG: &[u8] = &[
     0x42, 0x60, 0x82,
 ];
 
-fn scratch() -> (tempfile::TempDir, PathBuf) {
+/// A scratch database, or `None` (test skipped) without cliphist.
+fn scratch() -> Option<(tempfile::TempDir, PathBuf)> {
+    if !Cliphist::installed() {
+        eprintln!("skipped: cliphist not on PATH");
+        return None;
+    }
     let dir = tempfile::tempdir().unwrap();
     let db = dir.path().join("db");
-    (dir, db)
+    Some((dir, db))
 }
 
 fn store(db: &PathBuf, content: &[u8]) {
@@ -40,14 +46,18 @@ fn store(db: &PathBuf, content: &[u8]) {
 
 #[test]
 fn empty_database_is_an_empty_list_not_an_error() {
-    let (_dir, db) = scratch();
+    let Some((_dir, db)) = scratch() else {
+        return;
+    };
     let backend = Cliphist::custom("cliphist", Some(db));
     assert_eq!(backend.entries().unwrap(), vec![]);
 }
 
 #[test]
 fn entries_come_back_newest_first_with_content_roundtrip() {
-    let (_dir, db) = scratch();
+    let Some((_dir, db)) = scratch() else {
+        return;
+    };
     store(&db, b"first entry");
     store(&db, b"second entry");
 
@@ -63,7 +73,9 @@ fn entries_come_back_newest_first_with_content_roundtrip() {
 
 #[test]
 fn binary_survives_the_roundtrip_and_classifies_as_image() {
-    let (_dir, db) = scratch();
+    let Some((_dir, db)) = scratch() else {
+        return;
+    };
     store(&db, PNG);
 
     let backend = Cliphist::custom("cliphist", Some(db));
@@ -94,7 +106,9 @@ fn absent_binary_is_a_clear_error() {
 
 #[test]
 fn decode_of_unknown_id_is_an_error() {
-    let (_dir, db) = scratch();
+    let Some((_dir, db)) = scratch() else {
+        return;
+    };
     store(&db, b"something");
     let backend = Cliphist::custom("cliphist", Some(db));
     assert!(backend.content("99999").is_err());

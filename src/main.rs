@@ -182,11 +182,17 @@ mod tests {
 
     #[test]
     fn decode_id_is_optional_and_never_a_flag() {
-        assert_eq!(run(&["decode", "42"]).unwrap().verb, Verb::Decode(Some("42".into())));
+        assert_eq!(
+            run(&["decode", "42"]).unwrap().verb,
+            Verb::Decode(Some("42".into()))
+        );
         let inv = run(&["decode", "--backend", "native"]).unwrap();
         assert_eq!(inv.verb, Verb::Decode(None));
         assert_eq!(inv.backend, Backend::Native);
-        assert!(matches!(parse(["decode".to_string(), "--help".to_string()]), Ok(Parsed::Help)));
+        assert!(matches!(
+            parse(["decode".to_string(), "--help".to_string()]),
+            Ok(Parsed::Help)
+        ));
     }
 
     #[test]

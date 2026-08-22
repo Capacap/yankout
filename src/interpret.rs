@@ -121,8 +121,7 @@ pub fn looks_binary(content: &[u8]) -> bool {
 /// is still text, so list previews agree with drag-time classification
 /// on everything both can see.
 pub fn prefix_looks_binary(prefix: &[u8]) -> bool {
-    prefix.contains(&0)
-        || std::str::from_utf8(prefix).is_err_and(|e| e.error_len().is_some())
+    prefix.contains(&0) || std::str::from_utf8(prefix).is_err_and(|e| e.error_len().is_some())
 }
 
 pub fn human_size(bytes: u64) -> String {

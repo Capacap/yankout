@@ -40,7 +40,9 @@ pub fn decode(
                 .map_err(|e| Error(format!("reading id from stdin: {e}")))?;
             let id = line.split('\t').next().unwrap_or("").trim();
             if id.is_empty() {
-                return Err(Error("decode needs an id, as an argument or on stdin".into()));
+                return Err(Error(
+                    "decode needs an id, as an argument or on stdin".into(),
+                ));
             }
             id.to_string()
         }
@@ -52,7 +54,11 @@ pub fn decode(
 }
 
 /// Convenience for `decode` from the process's own stdin.
-pub fn decode_stdin(history: &dyn History, id: Option<&str>, out: &mut impl Write) -> Result<(), Error> {
+pub fn decode_stdin(
+    history: &dyn History,
+    id: Option<&str>,
+    out: &mut impl Write,
+) -> Result<(), Error> {
     let stdin = io::stdin();
     decode(history, id, &mut stdin.lock(), out)
 }
@@ -65,11 +71,17 @@ mod tests {
     fn history() -> InMemory {
         InMemory(vec![
             (
-                Entry { id: "7".into(), preview: "[[ image/png 2 KiB ]]".into() },
+                Entry {
+                    id: "7".into(),
+                    preview: "[[ image/png 2 KiB ]]".into(),
+                },
                 b"\x89PNG".to_vec(),
             ),
             (
-                Entry { id: "3".into(), preview: "hello world".into() },
+                Entry {
+                    id: "3".into(),
+                    preview: "hello world".into(),
+                },
                 b"hello world\n".to_vec(),
             ),
         ])

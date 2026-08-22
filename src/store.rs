@@ -26,9 +26,7 @@ pub fn default_dir() -> Result<PathBuf, Error> {
     let base = std::env::var_os("XDG_DATA_HOME")
         .map(PathBuf::from)
         .filter(|p| p.is_absolute())
-        .or_else(|| {
-            std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/share"))
-        })
+        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/share")))
         .ok_or_else(|| Error("neither XDG_DATA_HOME nor HOME is set".into()))?;
     Ok(base.join("yankout/history"))
 }
@@ -98,8 +96,8 @@ impl Store {
     /// preview without pulling a multi-megabyte image into memory.
     pub fn read_prefix(&self, seq: u64, limit: usize) -> Result<(Vec<u8>, u64), Error> {
         use std::io::Read;
-        let mut file = File::open(self.path(seq))
-            .map_err(|e| Error(format!("reading entry {seq}: {e}")))?;
+        let mut file =
+            File::open(self.path(seq)).map_err(|e| Error(format!("reading entry {seq}: {e}")))?;
         let total = file
             .metadata()
             .map_err(|e| Error(format!("reading entry {seq}: {e}")))?

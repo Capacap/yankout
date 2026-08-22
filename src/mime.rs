@@ -44,7 +44,10 @@ mod tests {
 
     #[test]
     fn png_beats_other_images_beats_text() {
-        assert_eq!(pick(["text/plain", "image/webp", "image/png"]), Some("image/png"));
+        assert_eq!(
+            pick(["text/plain", "image/webp", "image/png"]),
+            Some("image/png")
+        );
         assert_eq!(pick(["text/plain", "image/webp"]), Some("image/webp"));
         assert_eq!(
             pick(["text/plain", "text/plain;charset=utf-8"]),

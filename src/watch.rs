@@ -14,7 +14,9 @@ use std::time::{Duration, Instant};
 use rustix::event::{PollFd, PollFlags};
 
 use wayland_client::protocol::{wl_registry, wl_seat::WlSeat};
-use wayland_client::{Connection, Dispatch, Proxy, QueueHandle, backend::ObjectId, event_created_child};
+use wayland_client::{
+    Connection, Dispatch, Proxy, QueueHandle, backend::ObjectId, event_created_child,
+};
 use wayland_protocols::ext::data_control::v1::client::{
     ext_data_control_device_v1::{self, ExtDataControlDeviceV1},
     ext_data_control_manager_v1::ExtDataControlManagerV1,
@@ -40,8 +42,8 @@ const SOURCE_STALL: Duration = Duration::from_secs(5);
 
 pub fn run(dir: PathBuf, cap: usize) -> Result<(), Error> {
     let writer = Writer::open(dir, cap)?;
-    let conn = Connection::connect_to_env()
-        .map_err(|e| Error(format!("connecting to wayland: {e}")))?;
+    let conn =
+        Connection::connect_to_env().map_err(|e| Error(format!("connecting to wayland: {e}")))?;
     let mut queue = conn.new_event_queue();
     let qh = queue.handle();
     conn.display().get_registry(&qh, ());
@@ -173,7 +175,11 @@ impl State {
     }
 }
 
-fn read_selection(conn: &Connection, offer: &Offer, mimes: &[String]) -> Result<Option<Vec<u8>>, Error> {
+fn read_selection(
+    conn: &Connection,
+    offer: &Offer,
+    mimes: &[String],
+) -> Result<Option<Vec<u8>>, Error> {
     let Some(mime) = crate::mime::pick(mimes.iter().map(String::as_str)) else {
         return Ok(None);
     };
@@ -223,7 +229,9 @@ fn read_pipe(fd: impl AsFd, stall: Duration) -> Result<Vec<u8>, Error> {
             Ok(n) => {
                 content.extend_from_slice(&buf[..n]);
                 if content.len() > MAX_ENTRY_BYTES {
-                    return Err(Error(format!("selection exceeds {MAX_ENTRY_BYTES} bytes, skipped")));
+                    return Err(Error(format!(
+                        "selection exceeds {MAX_ENTRY_BYTES} bytes, skipped"
+                    )));
                 }
             }
             Err(rustix::io::Errno::INTR) => continue,
@@ -252,7 +260,10 @@ impl Dispatch<wl_registry::WlRegistry, ()> for State {
         _: &Connection,
         qh: &QueueHandle<Self>,
     ) {
-        if let wl_registry::Event::Global { name, interface, .. } = event {
+        if let wl_registry::Event::Global {
+            name, interface, ..
+        } = event
+        {
             match interface.as_str() {
                 "wl_seat" if state.seat.is_none() => {
                     state.seat = Some(registry.bind(name, 1, qh, ()));

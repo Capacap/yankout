@@ -60,8 +60,10 @@ Decided at drag time from the full entry content:
 
 ## History
 
-`yankout watch` maintains yankout's own clipboard history, one
-instance per session. It talks to the compositor directly over
+`yankout watch` maintains yankout's own clipboard history; one
+instance runs per store, and the store lives under your user data
+directory, so a second session sharing the same home reads the first
+one's history rather than keeping its own. It talks to the compositor directly over
 ext-data-control-v1, or the older zwlr-data-control where that is all
 there is, and keeps entries under `$XDG_DATA_HOME/yankout/history`
 (newest first, deduplicated, capped at 750). Offers marked
@@ -73,9 +75,10 @@ spawn-at-startup "yankout" "watch"
 ```
 
 While a watcher is running, list mode reads this history. Otherwise it
-falls back to [cliphist](https://github.com/sentriz/cliphist), which
-also covers compositors that offer no data-control protocol at all.
-`--backend cliphist|native` forces the choice.
+falls back to [cliphist](https://github.com/sentriz/cliphist) if that
+is installed, which also covers compositors that offer no data-control
+protocol at all; without cliphist it reads the native history as it
+stands. `--backend cliphist|native` forces the choice.
 
 The history is also readable from the terminal, in cliphist's shape so
 existing pickers switch by renaming the command:

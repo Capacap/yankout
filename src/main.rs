@@ -161,7 +161,7 @@ usage: yankout [--css <file>] [--backend cliphist|native]
   --css <file> load this css on top of the default theme instead of
                $XDG_CONFIG_HOME/yankout/style.css
   --backend    history backend; the default picks native while a
-               watcher is running and cliphist otherwise
+               watcher is running, else cliphist if installed
 ";
 
 #[cfg(test)]

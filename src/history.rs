@@ -41,6 +41,14 @@ impl Cliphist {
         }
     }
 
+    /// Whether the `cliphist` binary is on PATH.
+    pub fn installed() -> bool {
+        let Some(path) = std::env::var_os("PATH") else {
+            return false;
+        };
+        std::env::split_paths(&path).any(|dir| dir.join("cliphist").is_file())
+    }
+
     fn output(&self, args: &[&str]) -> Result<std::process::Output, Error> {
         let mut cmd = Command::new(&self.program);
         if let Some(db) = &self.db_path {
@@ -107,8 +115,9 @@ fn parse_list(stdout: &str) -> Vec<Entry> {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Backend {
-    /// Native while a watcher is feeding the store, cliphist otherwise:
-    /// unattended native history would silently go stale.
+    /// Native while a watcher is feeding the store; otherwise cliphist
+    /// when it is installed, since unattended native history goes stale;
+    /// otherwise native anyway, because stale history beats none.
     Auto,
     Cliphist,
     Native,
@@ -119,11 +128,13 @@ pub fn select(choice: Backend) -> Result<Box<dyn History>, Error> {
         Backend::Cliphist => Ok(Box::new(Cliphist::new())),
         Backend::Native => Ok(Box::new(Native::new(crate::store::default_dir()?))),
         Backend::Auto => {
-            let dir = crate::store::default_dir()?;
-            if crate::store::watcher_active(&dir) {
-                Ok(Box::new(Native::new(dir)))
-            } else {
-                Ok(Box::new(Cliphist::new()))
+            // no resolvable data dir (no HOME) is not fatal: cliphist may
+            // still work
+            let dir = crate::store::default_dir().ok();
+            let live = dir.as_deref().is_some_and(crate::store::watcher_active);
+            match dir {
+                Some(dir) if live || !Cliphist::installed() => Ok(Box::new(Native::new(dir))),
+                _ => Ok(Box::new(Cliphist::new())),
             }
         }
     }

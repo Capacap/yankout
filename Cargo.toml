@@ -5,12 +5,14 @@ members = ["core"]
 version = "0.1.0"
 edition = "2024"
 repository = "https://github.com/Capacap/yankout"
+license = "MIT OR Apache-2.0"
 
 [package]
 name = "yankout"
 version.workspace = true
 edition.workspace = true
 repository.workspace = true
+license.workspace = true
 description = "Wayland clipboard picker whose entries leave by drag"
 readme = "README.md"
 keywords = ["wayland", "clipboard", "drag-and-drop", "gtk4"]

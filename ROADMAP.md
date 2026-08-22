@@ -153,6 +153,10 @@ fallback exercised once by hand (`--backend cliphist`, or with the
 watcher stopped). Automated drag e2e rig only if regressions ever
 justify it.
 
+Outcome (22 August 2026): closed after three days of daily driving —
+no odd behaviour in the native history. cliphist's watchers still run
+beside it for fuzzel's picker (see the DESIGN.md open question).
+
 ## M7 — Look and config
 
 The visual direction deferred at M5: the filter becomes a bare `> `

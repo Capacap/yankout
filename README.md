@@ -6,8 +6,23 @@ real file drop. Browser upload zones and chat attachment areas accept
 dragged files but not pasted paths; yankout turns the path already
 sitting in your clipboard history into the drop those targets want.
 
-Background and rationale live in [DESIGN.md](DESIGN.md); the milestone
-plan in [ROADMAP.md](ROADMAP.md).
+## Why a window
+
+A Wayland drag must start from a pointer gesture on a surface owned by
+the initiating client, so a daemon cannot add drag to an existing
+clipboard manager: something visible has to exist under the cursor.
+Terminals cannot be that surface either — there is no escape-sequence
+protocol for initiating a drag the way OSC 52 writes the clipboard —
+so a toolkit window is unavoidable. yankout makes it the smallest one
+possible, in the launcher genre terminal users already accept (dmenu,
+fuzzel): spawned by keybind, keyboard-driven, gone on Esc, styled to
+match the terminal. The mouse does exactly the one thing Wayland
+demands and nothing else.
+
+Browsing and curating history is the terminal's job (fzf over
+`cliphist list`, or whatever picker you already use); filter-as-you-type
+is part of the launcher contract and stays, pin/delete and the like are
+out of scope.
 
 ## Modes
 

@@ -19,8 +19,8 @@ fuzzel): spawned by keybind, keyboard-driven, gone on Esc, styled to
 match the terminal. The mouse does exactly the one thing Wayland
 demands and nothing else.
 
-Browsing and curating history is the terminal's job (fzf over
-`cliphist list`, or whatever picker you already use); filter-as-you-type
+Browsing and curating history is the terminal's job (fzf or fuzzel
+over `yankout list`, or whatever picker you already use); filter-as-you-type
 is part of the launcher contract and stays, pin/delete and the like are
 out of scope.
 
@@ -76,6 +76,18 @@ While a watcher is running, list mode reads this history. Otherwise it
 falls back to [cliphist](https://github.com/sentriz/cliphist), which
 also covers compositors that offer no data-control protocol at all.
 `--backend cliphist|native` forces the choice.
+
+The history is also readable from the terminal, in cliphist's shape so
+existing pickers switch by renaming the command:
+
+```sh
+yankout list              # <id>TAB<preview> per line, newest first
+yankout decode 42         # raw content of one entry
+yankout list | fuzzel --dmenu | yankout decode | wl-copy
+```
+
+`decode` takes the id as an argument or as the first tab-field of a
+line on stdin, so a picked `list` line pipes back whole.
 
 ## Requirements
 

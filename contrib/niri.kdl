@@ -23,6 +23,6 @@ window-rule {
 // Mod+Shift+C hotkey-overlay-title="Clipboard drag" { spawn "yankout"; }
 
 // Native history watcher (top level, one per session). Replaces the
-// `wl-paste --watch cliphist store` pair — unless something else still
-// reads cliphist, in which case both can run side by side.
+// `wl-paste --watch cliphist store` pair; anything that read `cliphist
+// list` can read `yankout list` instead.
 // spawn-at-startup "yankout" "watch"

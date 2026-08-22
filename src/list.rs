@@ -7,7 +7,7 @@
 
 use gtk4 as gtk;
 
-use std::cell::{Cell, RefCell};
+use std::cell::Cell;
 use std::process::ExitCode;
 use std::rc::Rc;
 
@@ -18,6 +18,7 @@ use yankout_core::history::{Entry, History};
 use yankout_core::{clipboard, interpret};
 
 use crate::provider;
+use crate::row::Row;
 
 pub fn run(user_css: Option<String>, backend: Box<dyn History>) -> ExitCode {
     let backend: Rc<dyn History> = Rc::from(backend);
@@ -43,26 +44,7 @@ pub fn run(user_css: Option<String>, backend: Box<dyn History>) -> ExitCode {
 }
 
 fn build_list(app: &gtk::Application, backend: Rc<dyn History>, entries: &[Entry]) {
-    let store = gio::ListStore::new::<glib::BoxedAnyObject>();
-    for entry in entries {
-        store.append(&glib::BoxedAnyObject::new(entry.clone()));
-    }
-
-    // Lowercased once per keystroke, matched per row.
-    let query = Rc::new(RefCell::new(String::new()));
-    let filter = gtk::CustomFilter::new({
-        let query = query.clone();
-        move |obj| {
-            let q = query.borrow();
-            if q.is_empty() {
-                return true;
-            }
-            let boxed = obj.downcast_ref::<glib::BoxedAnyObject>().unwrap();
-            boxed.borrow::<Entry>().preview.to_lowercase().contains(&*q)
-        }
-    });
-    let filtered = gtk::FilterListModel::new(Some(store), Some(filter.clone()));
-    let selection = gtk::SingleSelection::new(Some(filtered));
+    let (filter, selection) = model(entries);
 
     let factory = gtk::SignalListItemFactory::new();
     factory.connect_setup(|_, item| {
@@ -79,9 +61,9 @@ fn build_list(app: &gtk::Application, backend: Rc<dyn History>, entries: &[Entry
     });
     factory.connect_bind(|_, item| {
         let item = item.downcast_ref::<gtk::ListItem>().unwrap();
-        let boxed = item.item().and_downcast::<glib::BoxedAnyObject>().unwrap();
+        let row = item.item().and_downcast::<Row>().unwrap();
         let label = item.child().and_downcast::<gtk::Label>().unwrap();
-        label.set_text(&boxed.borrow::<Entry>().preview);
+        label.set_text(&row.preview());
     });
 
     // No single_click_activate: its select-on-hover would let the pointer
@@ -235,12 +217,10 @@ fn build_list(app: &gtk::Application, backend: Rc<dyn History>, entries: &[Entry
     window.add_controller(key);
 
     search.connect_changed({
-        let query = query.clone();
         let selection = selection.clone();
         let list = list.clone();
         move |s| {
-            *query.borrow_mut() = s.text().to_lowercase();
-            filter.changed(gtk::FilterChange::Different);
+            filter.set_search(Some(s.text().as_str()));
             if selection.n_items() > 0 {
                 selection.set_selected(0);
                 list.scroll_to(0, gtk::ListScrollFlags::NONE, None);
@@ -254,13 +234,8 @@ fn build_list(app: &gtk::Application, backend: Rc<dyn History>, entries: &[Entry
         let win = window.clone();
         let selection = selection.clone();
         move |_, pos| {
-            if let Some(obj) = selection.item(pos) {
-                let entry = obj
-                    .downcast_ref::<glib::BoxedAnyObject>()
-                    .unwrap()
-                    .borrow::<Entry>()
-                    .clone();
-                recall(backend.as_ref(), &entry, &win);
+            if let Some(row) = selection.item(pos).and_downcast::<Row>() {
+                recall(backend.as_ref(), &row.entry(), &win);
             }
         }
     });
@@ -271,10 +246,20 @@ fn build_list(app: &gtk::Application, backend: Rc<dyn History>, entries: &[Entry
     }
 }
 
+/// Rows behind a case-insensitive substring filter on the preview.
+fn model(entries: &[Entry]) -> (gtk::StringFilter, gtk::SingleSelection) {
+    let store = entries.iter().map(Row::new).collect::<gio::ListStore>();
+    let filter = gtk::StringFilter::builder()
+        .expression(Row::this_expression("preview"))
+        .match_mode(gtk::StringFilterMatchMode::Substring)
+        .ignore_case(true)
+        .build();
+    let filtered = gtk::FilterListModel::new(Some(store), Some(filter.clone()));
+    (filter, gtk::SingleSelection::new(Some(filtered)))
+}
+
 fn selected_entry(selection: &gtk::SingleSelection) -> Option<Entry> {
-    let obj = selection.selected_item()?;
-    let boxed = obj.downcast_ref::<glib::BoxedAnyObject>()?;
-    Some(boxed.borrow::<Entry>().clone())
+    Some(selection.selected_item().and_downcast::<Row>()?.entry())
 }
 
 fn move_selection(selection: &gtk::SingleSelection, list: &gtk::ListView, delta: i32) {
@@ -300,5 +285,44 @@ fn recall(backend: &dyn History, entry: &Entry, window: &gtk::ApplicationWindow)
     {
         Ok(()) => window.close(),
         Err(e) => eprintln!("yankout: recall failed: {e}"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn entry(id: &str, preview: &str) -> Entry {
+        Entry {
+            id: id.into(),
+            preview: preview.into(),
+        }
+    }
+
+    #[test]
+    fn filter_is_a_case_insensitive_substring_match() {
+        // GTK types need a display; without one there is nothing to test here.
+        if gtk::init().is_err() {
+            eprintln!("skipped: no display");
+            return;
+        }
+        let entries = [
+            entry("1", "Hello World"),
+            entry("2", "cargo build"),
+            entry("3", "hello again"),
+        ];
+        let (filter, selection) = model(&entries);
+        assert_eq!(selection.n_items(), 3);
+        filter.set_search(Some("HELLO"));
+        assert_eq!(selection.n_items(), 2);
+        assert_eq!(selected_entry(&selection).unwrap().id, "1");
+        filter.set_search(Some("build"));
+        assert_eq!(selection.n_items(), 1);
+        assert_eq!(selected_entry(&selection).unwrap().id, "2");
+        filter.set_search(Some("zzz"));
+        assert_eq!(selection.n_items(), 0);
+        assert_eq!(selected_entry(&selection), None);
+        filter.set_search(None);
+        assert_eq!(selection.n_items(), 3);
     }
 }

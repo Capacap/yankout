@@ -1,6 +1,7 @@
 mod list;
 mod provider;
 mod puck;
+mod row;
 mod theme;
 
 use std::path::PathBuf;

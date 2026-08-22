@@ -86,7 +86,10 @@ fn binary_survives_the_roundtrip_and_classifies_as_image() {
 fn absent_binary_is_a_clear_error() {
     let backend = Cliphist::custom("definitely-not-cliphist-zzz", None);
     let err = backend.entries().unwrap_err();
-    assert!(err.0.contains("not found"), "{}", err.0);
+    assert!(
+        matches!(err, yankout_core::Error::MissingProgram(_)),
+        "{err}"
+    );
 }
 
 #[test]

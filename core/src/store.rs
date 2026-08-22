@@ -27,7 +27,7 @@ pub fn default_dir() -> Result<PathBuf, Error> {
         .map(PathBuf::from)
         .filter(|p| p.is_absolute())
         .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/share")))
-        .ok_or_else(|| Error("neither XDG_DATA_HOME nor HOME is set".into()))?;
+        .ok_or(Error::NoDataDir)?;
     Ok(base.join("yankout/history"))
 }
 
@@ -67,7 +67,9 @@ impl Store {
             Ok(e) => e,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
             Err(e) => {
-                return Err(Error(format!("reading store {}: {e}", self.dir.display())));
+                return Err(Error::io(format!("reading store {}", self.dir.display()))(
+                    e,
+                ));
             }
         };
         // Only regular files named exactly as this store writes them are
@@ -89,7 +91,7 @@ impl Store {
     }
 
     pub fn read(&self, seq: u64) -> Result<Vec<u8>, Error> {
-        fs::read(self.path(seq)).map_err(|e| Error(format!("reading entry {seq}: {e}")))
+        fs::read(self.path(seq)).map_err(Error::io(format!("reading entry {seq}")))
     }
 
     /// First `limit` bytes plus the entry's total size — enough for a
@@ -97,14 +99,14 @@ impl Store {
     pub fn read_prefix(&self, seq: u64, limit: usize) -> Result<(Vec<u8>, u64), Error> {
         use std::io::Read;
         let mut file =
-            File::open(self.path(seq)).map_err(|e| Error(format!("reading entry {seq}: {e}")))?;
+            File::open(self.path(seq)).map_err(Error::io(format!("reading entry {seq}")))?;
         let total = file
             .metadata()
-            .map_err(|e| Error(format!("reading entry {seq}: {e}")))?
+            .map_err(Error::io(format!("reading entry {seq}")))?
             .len();
         let mut prefix = vec![0; limit.min(total as usize)];
         file.read_exact(&mut prefix)
-            .map_err(|e| Error(format!("reading entry {seq}: {e}")))?;
+            .map_err(Error::io(format!("reading entry {seq}")))?;
         Ok((prefix, total))
     }
 
@@ -147,15 +149,11 @@ impl Writer {
     pub fn open(dir: impl Into<PathBuf>, cap: usize) -> Result<Self, Error> {
         let store = Store::open(dir);
         fs::create_dir_all(&store.dir)
-            .map_err(|e| Error(format!("creating store {}: {e}", store.dir.display())))?;
-        let lock = File::create(store.dir.join(LOCK_FILE))
-            .map_err(|e| Error(format!("creating store lock: {e}")))?;
-        rustix::fs::flock(&lock, FlockOperation::NonBlockingLockExclusive).map_err(|_| {
-            Error(format!(
-                "store {} is locked, another watcher is already running",
-                store.dir.display()
-            ))
-        })?;
+            .map_err(Error::io(format!("creating store {}", store.dir.display())))?;
+        let lock =
+            File::create(store.dir.join(LOCK_FILE)).map_err(Error::io("creating store lock"))?;
+        rustix::fs::flock(&lock, FlockOperation::NonBlockingLockExclusive)
+            .map_err(|_| Error::StoreLocked(store.dir.clone()))?;
 
         let mut by_key = HashMap::new();
         let mut by_seq = BTreeMap::new();
@@ -212,9 +210,9 @@ impl Writer {
 
         let seq = self.take_seq();
         let tmp = self.store.dir.join(format!(".tmp-{seq:020}"));
-        fs::write(&tmp, content).map_err(|e| Error(format!("writing entry {seq}: {e}")))?;
+        fs::write(&tmp, content).map_err(Error::io(format!("writing entry {seq}")))?;
         fs::rename(&tmp, self.store.path(seq))
-            .map_err(|e| Error(format!("publishing entry {seq}: {e}")))?;
+            .map_err(Error::io(format!("publishing entry {seq}")))?;
         self.by_seq.insert(seq, key);
         self.by_key.insert(key, seq);
         self.evict();

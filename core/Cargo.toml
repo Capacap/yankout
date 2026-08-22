@@ -5,6 +5,7 @@ edition = "2024"
 description = "Clipboard history store, watcher and drag-payload classification for yankout"
 
 [dependencies]
+thiserror = "2"
 rustix = { version = "1", features = ["event", "fs", "pipe"] }
 wayland-client = "0.31"
 wayland-protocols = { version = "0.32", features = ["client", "staging"] }

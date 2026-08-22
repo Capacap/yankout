@@ -42,8 +42,7 @@ const SOURCE_STALL: Duration = Duration::from_secs(5);
 
 pub fn run(dir: PathBuf, cap: usize) -> Result<(), Error> {
     let writer = Writer::open(dir, cap)?;
-    let conn =
-        Connection::connect_to_env().map_err(|e| Error(format!("connecting to wayland: {e}")))?;
+    let conn = Connection::connect_to_env().map_err(Error::wayland("connecting to wayland"))?;
     let mut queue = conn.new_event_queue();
     let qh = queue.handle();
     conn.display().get_registry(&qh, ());
@@ -59,12 +58,9 @@ pub fn run(dir: PathBuf, cap: usize) -> Result<(), Error> {
     };
     queue
         .roundtrip(&mut state)
-        .map_err(|e| Error(format!("wayland registry roundtrip: {e}")))?;
+        .map_err(Error::wayland("wayland registry roundtrip"))?;
 
-    let seat = state
-        .seat
-        .clone()
-        .ok_or_else(|| Error("compositor advertised no wl_seat".into()))?;
+    let seat = state.seat.clone().ok_or(Error::NoSeat)?;
     if let Some(mgr) = &state.ext_mgr {
         eprintln!("yankout watch: using ext-data-control-v1");
         mgr.get_data_device(&seat, &qh, ());
@@ -72,19 +68,15 @@ pub fn run(dir: PathBuf, cap: usize) -> Result<(), Error> {
         eprintln!("yankout watch: using zwlr-data-control (ext not offered)");
         mgr.get_data_device(&seat, &qh, ());
     } else {
-        return Err(Error(
-            "compositor offers neither ext-data-control-v1 nor zwlr-data-control; \
-             use cliphist's wl-paste watchers instead"
-                .into(),
-        ));
+        return Err(Error::NoDataControl);
     }
 
     loop {
         queue
             .blocking_dispatch(&mut state)
-            .map_err(|e| Error(format!("wayland dispatch: {e}")))?;
+            .map_err(Error::wayland("wayland dispatch"))?;
         if state.finished {
-            return Err(Error("compositor closed the data-control device".into()));
+            return Err(Error::DeviceFinished);
         }
         if let Some(offer) = state.pending.take() {
             let mimes = state.mimes.remove(&offer.id()).unwrap_or_default();
@@ -184,13 +176,13 @@ fn read_selection(
         return Ok(None);
     };
     let (read_end, write_end) =
-        rustix::pipe::pipe().map_err(|e| Error(format!("creating pipe: {e}")))?;
+        rustix::pipe::pipe().map_err(|e| Error::io("creating pipe")(e.into()))?;
     offer.receive(mime.to_string(), write_end.as_fd());
     // the request holds its own dup of the fd; ours must close or the
     // read below never sees EOF
     drop(write_end);
     conn.flush()
-        .map_err(|e| Error(format!("flushing receive request: {e}")))?;
+        .map_err(Error::wayland("flushing receive request"))?;
 
     let content = read_pipe(read_end, SOURCE_STALL)?;
     if worth_storing(mime, &content) {
@@ -209,19 +201,17 @@ fn read_pipe(fd: impl AsFd, stall: Duration) -> Result<Vec<u8>, Error> {
         loop {
             let left = deadline.saturating_duration_since(Instant::now());
             if left.is_zero() {
-                return Err(Error(format!(
-                    "source stalled for {:?}, selection skipped",
-                    stall
-                )));
+                return Err(Error::SourceStalled(stall));
             }
             let mut fds = [PollFd::new(&fd, PollFlags::IN)];
-            let timeout = rustix::event::Timespec::try_from(left)
-                .map_err(|_| Error("poll timeout out of range".into()))?;
+            let timeout = rustix::event::Timespec::try_from(left).map_err(|_| {
+                Error::io("waiting for selection")(std::io::ErrorKind::InvalidInput.into())
+            })?;
             match rustix::event::poll(&mut fds, Some(&timeout)) {
                 Ok(0) => continue,
                 Ok(_) => break,
                 Err(rustix::io::Errno::INTR) => continue,
-                Err(e) => return Err(Error(format!("waiting for selection: {e}"))),
+                Err(e) => return Err(Error::io("waiting for selection")(e.into())),
             }
         }
         match rustix::io::read(&fd, &mut buf) {
@@ -229,13 +219,11 @@ fn read_pipe(fd: impl AsFd, stall: Duration) -> Result<Vec<u8>, Error> {
             Ok(n) => {
                 content.extend_from_slice(&buf[..n]);
                 if content.len() > MAX_ENTRY_BYTES {
-                    return Err(Error(format!(
-                        "selection exceeds {MAX_ENTRY_BYTES} bytes, skipped"
-                    )));
+                    return Err(Error::SelectionTooLarge(MAX_ENTRY_BYTES));
                 }
             }
             Err(rustix::io::Errno::INTR) => continue,
-            Err(e) => return Err(Error(format!("reading selection: {e}"))),
+            Err(e) => return Err(Error::io("reading selection")(e.into())),
         }
     }
 }
@@ -411,7 +399,7 @@ mod tests {
         let (r, w) = rustix::pipe::pipe().unwrap();
         rustix::io::write(&w, b"partial").unwrap();
         let err = read_pipe(r, Duration::from_millis(50)).unwrap_err();
-        assert!(err.0.contains("stalled"), "{err}");
+        assert!(matches!(err, Error::SourceStalled(_)), "{err}");
         drop(w);
     }
 

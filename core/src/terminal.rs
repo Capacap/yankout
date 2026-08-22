@@ -16,7 +16,7 @@ pub fn list(history: &dyn History, out: &mut impl Write) -> Result<(), Error> {
         match writeln!(out, "{}\t{}", entry.id, entry.preview) {
             Ok(()) => {}
             Err(e) if e.kind() == io::ErrorKind::BrokenPipe => return Ok(()),
-            Err(e) => return Err(Error(format!("writing list: {e}"))),
+            Err(e) => return Err(Error::io("writing list")(e)),
         }
     }
     Ok(())
@@ -37,12 +37,10 @@ pub fn decode(
             let mut line = String::new();
             input
                 .read_line(&mut line)
-                .map_err(|e| Error(format!("reading id from stdin: {e}")))?;
+                .map_err(Error::io("reading id from stdin"))?;
             let id = line.split('\t').next().unwrap_or("").trim();
             if id.is_empty() {
-                return Err(Error(
-                    "decode needs an id, as an argument or on stdin".into(),
-                ));
+                return Err(Error::MissingId);
             }
             id.to_string()
         }
@@ -50,7 +48,7 @@ pub fn decode(
     let content = history.content(&id)?;
     out.write_all(&content)
         .and_then(|()| out.flush())
-        .map_err(|e| Error(format!("writing entry {id}: {e}")))
+        .map_err(Error::io(format!("writing entry {id}")))
 }
 
 /// Convenience for `decode` from the process's own stdin.
@@ -113,7 +111,7 @@ mod tests {
     fn decode_with_nothing_to_go_on_is_an_error() {
         let mut out = Vec::new();
         let err = decode(&history(), None, &mut &b"\n"[..], &mut out).unwrap_err();
-        assert!(err.0.contains("needs an id"));
+        assert!(matches!(err, Error::MissingId), "{err}");
     }
 
     #[test]

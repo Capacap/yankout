@@ -58,9 +58,9 @@ impl Cliphist {
         cmd.args(args);
         cmd.output().map_err(|e| {
             if e.kind() == std::io::ErrorKind::NotFound {
-                Error(format!("{} not found on PATH", self.program))
+                Error::MissingProgram(self.program.clone())
             } else {
-                Error(format!("failed to run {}: {e}", self.program))
+                Error::io(format!("running {}", self.program))(e)
             }
         })
     }
@@ -82,7 +82,10 @@ impl History for Cliphist {
             if msg.contains("please store something first") {
                 return Ok(Vec::new());
             }
-            return Err(Error(format!("cliphist list failed: {}", msg.trim())));
+            return Err(Error::Program {
+                program: "cliphist list".into(),
+                detail: msg.trim().to_string(),
+            });
         }
         Ok(parse_list(&String::from_utf8_lossy(&out.stdout)))
     }
@@ -91,10 +94,10 @@ impl History for Cliphist {
         // id as argv: decode via stdin is fragile about trailing newlines
         let out = self.output(&["decode", id])?;
         if !out.status.success() {
-            return Err(Error(format!(
-                "cliphist decode {id} failed: {}",
-                String::from_utf8_lossy(&out.stderr).trim()
-            )));
+            return Err(Error::Program {
+                program: format!("cliphist decode {id}"),
+                detail: String::from_utf8_lossy(&out.stderr).trim().to_string(),
+            });
         }
         Ok(out.stdout)
     }
@@ -179,9 +182,7 @@ impl History for Native {
     }
 
     fn content(&self, id: &str) -> Result<Vec<u8>, Error> {
-        let seq: u64 = id
-            .parse()
-            .map_err(|_| Error(format!("not a native history id: {id}")))?;
+        let seq: u64 = id.parse().map_err(|_| Error::NoSuchEntry(id.to_string()))?;
         self.store.read(seq)
     }
 }
@@ -218,7 +219,7 @@ impl History for InMemory {
             .iter()
             .find(|(e, _)| e.id == id)
             .map(|(_, c)| c.clone())
-            .ok_or_else(|| Error(format!("no entry with id {id}")))
+            .ok_or_else(|| Error::NoSuchEntry(id.to_string()))
     }
 }
 

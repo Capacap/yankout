@@ -6,6 +6,9 @@ file path leaves as a real file drop. It also fills the role of a
 regular clipboard manager: search your history, recall an entry to
 the active clipboard.
 
+![The history window: age-tagged entries over a dark
+theme](.github/screenshot.png)
+
 When working in the terminal or in TUI apps like yazi and fzf,
 feeding a file into a GUI app such as a browser or editor is tedious.
 yankout lets the clipboard bridge that gap: copy the file path, open

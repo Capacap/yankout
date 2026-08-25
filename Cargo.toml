@@ -17,6 +17,7 @@ description = "Wayland clipboard picker whose entries leave by drag"
 readme = "README.md"
 keywords = ["wayland", "clipboard", "drag-and-drop", "gtk4"]
 categories = ["command-line-utilities", "gui"]
+exclude = [".github"]
 
 [dependencies]
 yankout-core = { path = "core", version = "1.0.0" }

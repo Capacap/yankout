@@ -71,11 +71,11 @@ compositor-specific protocols) and
 cargo install --path .
 ```
 
-Bind it to a key, and on a tiling compositor add a placement rule: a
-Wayland window cannot position itself, so floating the picker is the
-compositor's job. Ready-made niri rules and binds are in
-[contrib/niri.kdl](contrib/niri.kdl); the windows match as app-ids
-`dev.yankout.list` and `dev.yankout.puck`.
+Bind it to a key. Both windows are fixed-size, which niri and sway
+float on their own; compositors without that heuristic (Hyprland, for
+one) need a float rule matching the app-ids `dev.yankout.list` and
+`dev.yankout.puck`. Example niri binds and placement rules are in
+[contrib/niri.kdl](contrib/niri.kdl).
 
 ## Theming
 

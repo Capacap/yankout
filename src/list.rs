@@ -131,11 +131,14 @@ fn build_list(app: &gtk::Application, backend: Rc<dyn History>, entries: &[Entry
         vbox.append(&scroller);
     }
 
+    // Fixed size makes GTK report min == max, which the fixed-size
+    // heuristics in niri and sway float without a window rule.
     let window = gtk::ApplicationWindow::builder()
         .application(app)
         .title("yankout")
-        .default_width(440)
-        .default_height(400)
+        .width_request(440)
+        .height_request(400)
+        .resizable(false)
         .child(&vbox)
         .build();
 

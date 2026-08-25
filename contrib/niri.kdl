@@ -1,22 +1,12 @@
-// yankout niri snippets. A Wayland xdg toplevel cannot position itself,
-// so floating and placing the windows is the compositor's job — merge
-// these into ~/.config/niri/config.kdl and adjust to taste.
+// yankout niri snippets. Both windows are fixed-size, which niri's
+// heuristics float and centre on their own — rules are only needed
+// where placement should differ from that default. Merge into
+// ~/.config/niri/config.kdl and adjust to taste.
 
-// The puck is fixed-size, which niri floats and centres on its own; the
-// rule matters on setups where that heuristic is off or placement should
-// differ.
-window-rule {
-    match app-id=r#"^dev\.yankout\.puck$"#
-    open-floating true
-}
-
-// The list window is resizable and would tile without a rule.
-window-rule {
-    match app-id=r#"^dev\.yankout\.list$"#
-    open-floating true
-    default-column-width { fixed 440; }
-    default-window-height { fixed 400; }
-}
+// window-rule {
+//     match app-id=r#"^dev\.yankout\.(list|puck)$"#
+//     open-floating true
+// }
 
 // Spawn bind (goes inside the binds block). Use a full path if
 // ~/.cargo/bin is not on the niri session's PATH.

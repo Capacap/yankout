@@ -6,13 +6,13 @@ file path leaves as a real file drop. It also fills the role of a
 regular clipboard manager: search your history, recall an entry to
 the active clipboard.
 
-![The history window: age-tagged entries over a dark
-theme](.github/screenshot.png)
-
 When working in the terminal or in TUI apps like yazi and fzf,
 feeding a file into a GUI app such as a browser or editor is tedious.
 yankout lets the clipboard bridge that gap: copy the file path, open
 yankout, and drag the entry out of the window into the destination.
+
+![Filtering the history and dragging the entry into a browser drop
+zone as a file](.github/drag.gif)
 
 ## Usage
 
@@ -81,6 +81,9 @@ dark preference. Everything customizable is GTK CSS in
 `~/.config/yankout/style.css`; `--css <file>` tries a theme without
 installing it. [contrib/warm.css](contrib/warm.css) is a commented
 starting point that lists the stylable nodes.
+
+![The history window: age-tagged entries over a dark
+theme](.github/screenshot.png)
 
 ## License
 

@@ -5,6 +5,7 @@ edition.workspace = true
 repository.workspace = true
 license.workspace = true
 description = "Clipboard history store, watcher and drag-payload classification for yankout"
+readme = "README.md"
 
 [dependencies]
 thiserror = "2"

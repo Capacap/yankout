@@ -2,7 +2,7 @@
 members = ["core"]
 
 [workspace.package]
-version = "1.0.0"
+version = "1.0.1"
 edition = "2024"
 repository = "https://github.com/Capacap/yankout"
 license = "MIT OR Apache-2.0"
@@ -20,6 +20,6 @@ categories = ["command-line-utilities", "gui"]
 exclude = [".github"]
 
 [dependencies]
-yankout-core = { path = "core", version = "1.0.0" }
+yankout-core = { path = "core", version = "1.0.1" }
 clap = { version = "4", features = ["derive"] }
 gtk4 = { version = "0.11", features = ["v4_12"] }

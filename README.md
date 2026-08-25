@@ -1,155 +1,105 @@
 # yankout
 
-A Wayland clipboard picker in the dmenu tradition. What sets it apart
-is the exit: entries leave by drag, and a copied file path leaves as a
-real file drop. Browser upload zones and chat attachment areas accept
-dragged files but not pasted paths; yankout turns the path already
-sitting in your clipboard history into the drop those targets want.
+A Wayland clipboard picker in the dmenu tradition, except entries
+leave by drag, and a copied file path leaves as a real file drop.
+Browser upload zones and chat attachment areas accept dragged files
+but not pasted paths; yankout turns the path already sitting in your
+clipboard history into the drop those targets want.
 
-## Why a window
+The window exists because Wayland demands one. A drag must start from
+a pointer gesture on a surface owned by the dragging client, so no
+daemon or terminal escape sequence can do this. yankout keeps that
+window in the launcher shape terminal users already accept: spawned by
+keybind, keyboard-driven, gone on Esc. Filter-as-you-type is in;
+browsing and curating history stays in the terminal, where `yankout
+list` pipes into fzf, fuzzel, or whatever picker you already use.
 
-A Wayland drag must start from a pointer gesture on a surface owned by
-the initiating client, so a daemon cannot add drag to an existing
-clipboard manager: something visible has to exist under the cursor.
-Terminals cannot be that surface either — there is no escape-sequence
-protocol for initiating a drag the way OSC 52 writes the clipboard —
-so a toolkit window is unavoidable. yankout makes it the smallest one
-possible, in the launcher genre terminal users already accept (dmenu,
-fuzzel): spawned by keybind, keyboard-driven, gone on Esc, styled to
-match the terminal. The mouse does exactly the one thing Wayland
-demands and nothing else.
+## Usage
 
-Browsing and curating history is the terminal's job (fzf or fuzzel
-over `yankout list`, or whatever picker you already use); filter-as-you-type
-is part of the launcher contract and stays, pin/delete and the like are
-out of scope.
+**`yankout`** shows recent history, newest first. Type to filter,
+arrows or Ctrl+j/k to move, Enter to recall an entry to the active
+clipboard. The whole window is the drag handle for the selected entry,
+so filter with hands on the keyboard, then grab anywhere and pull.
+Closes on Esc, focus loss, or a completed drop.
 
-## Modes
-
-**List mode** (`yankout`, no arguments) shows recent history entries,
-newest first. Type to filter, arrows or Ctrl+j/k (or Ctrl+n/p) to move,
-Enter or double-click to recall an entry back to the active clipboard.
-The whole window is the drag handle for the selected entry, so there is
-no precise pointing at a narrow row. Filter to the entry with hands on
-the keyboard, then grab anywhere on the window and pull. Closes on Esc,
-focus loss, or a completed drop.
-
-**Puck mode** (`yankout --current`) shows no list, just a postage-stamp
-window whose entire surface drags the *live clipboard*. This is what
-makes any terminal program a drag source:
+**`yankout --current`** skips the list and shows a postage-stamp
+window whose entire surface drags the live clipboard, which makes any
+terminal program a drag source:
 
 ```sh
 echo ~/report.pdf | wl-copy && yankout --current
 ```
 
-The puck survives focus loss. Spawn it, click into the target to scroll
+The puck survives focus loss. Spawn it, click into the target to bring
 its drop zone into view, then come back and drag; only Esc or a
 completed drop ends it.
 
-## What a drag delivers
-
-Decided at drag time from the full entry content:
-
-- An absolute path to an existing file or directory (one per line):
-  offered as both `text/uri-list` and `text/plain`. File managers and
-  browsers take the file; text fields take the path string. Relative
-  and stale paths degrade to plain text.
-- Binary content: the actual type sniffed from magic bytes
-  (`image/png`, …), or `application/octet-stream` when nothing matches.
-- Everything else: plain text.
+What a drag delivers is decided at drag time. Absolute paths to
+existing files (one per line) are offered as `text/uri-list` plus
+`text/plain`, so file managers and browsers take the file while text
+fields take the path string; relative and stale paths degrade to plain
+text. Binary content is offered as the type sniffed from its magic
+bytes, and everything else as plain text.
 
 ## History
 
-`yankout watch` maintains yankout's own clipboard history; one
-instance runs per store, and the store lives under your user data
-directory, so a second session sharing the same home reads the first
-one's history rather than keeping its own. It talks to the compositor directly over
-ext-data-control-v1, or the older zwlr-data-control where that is all
-there is, and keeps entries under `$XDG_DATA_HOME/yankout/history`
-(newest first, deduplicated, capped at 750). Offers marked
-`x-kde-passwordManagerHint` are never stored, so password managers
-stay out of history. Start it from the compositor config; on niri:
-
-```kdl
-spawn-at-startup "yankout" "watch"
-```
-
-Once the store exists, list mode reads it — with the watcher stopped
-the history simply stops advancing, and the entry ages show it.
-[cliphist](https://github.com/sentriz/cliphist), if installed, is used
-only where the store has never been written, which covers compositors
-that offer no data-control protocol at all. `--backend cliphist|native`
-forces the choice.
+`yankout watch` maintains the history. Start it once per session from
+the compositor config (`spawn-at-startup "yankout" "watch"` on niri);
+it listens on ext-data-control-v1 (or the older zwlr variant) and
+keeps entries under `$XDG_DATA_HOME/yankout/history`, newest first,
+deduplicated, capped at 750. Offers marked `x-kde-passwordManagerHint`
+are never stored. On compositors with no data-control protocol,
+[cliphist](https://github.com/sentriz/cliphist) fills in if installed;
+`--backend cliphist|native` forces the choice.
 
 The history is also readable from the terminal, in cliphist's shape so
 existing pickers switch by renaming the command:
 
 ```sh
-yankout list              # <id>TAB<preview> per line, newest first
-yankout decode 42         # raw content of one entry
+yankout list        # <id>TAB<preview> per line, newest first
+yankout decode 42   # raw content of one entry
 yankout list | fuzzel --dmenu | yankout decode | wl-copy
 ```
 
-`decode` takes the id as an argument or as the first tab-field of a
-line on stdin, so a picked `list` line pipes back whole.
+## Installation
 
-## Requirements
-
-- Wayland with a GTK4-capable session (any compositor; the UI path
-  uses no compositor-specific protocols, and the watcher needs
-  data-control or a cliphist fallback as described above)
-- [wl-clipboard](https://github.com/bugaevc/wl-clipboard) (`wl-paste`
-  for the puck, `wl-copy` for recall)
-
-## Install
+Requires a GTK4-capable Wayland session (the UI path uses no
+compositor-specific protocols) and
+[wl-clipboard](https://github.com/bugaevc/wl-clipboard).
 
 ```sh
 cargo install --path .
 ```
 
-Then bind it. niri example (use a full path if `~/.cargo/bin` is not
-on the session's PATH):
-
-```kdl
-Mod+Shift+C { spawn "yankout"; }
-```
-
-## Window rules
-
-A Wayland xdg toplevel cannot position itself, so floating and placing
-the windows is the compositor's job. On a tiling compositor a placement
-rule is part of installing the tool; ready-made niri rules are in
-[contrib/niri.kdl](contrib/niri.kdl). The windows match as app-ids
-`dev.yankout.list` and `dev.yankout.puck`. The list window is resizable
-and would tile without a rule, while the fixed-size puck floats on its
-own under niri's heuristics.
+Bind it to a key, and on a tiling compositor add a placement rule: a
+Wayland window cannot position itself, so floating the picker is the
+compositor's job. Ready-made niri rules and binds are in
+[contrib/niri.kdl](contrib/niri.kdl); the windows match as app-ids
+`dev.yankout.list` and `dev.yankout.puck`.
 
 ## Theming
 
-The built-in default theme is neutral (monospace, flat, no colors of
-its own) and follows the GTK theme in light and dark. To layer your
-own on top, put GTK CSS in `~/.config/yankout/style.css`
-(`$XDG_CONFIG_HOME` respected); it is picked up automatically. `--css
-<file>` loads a different file instead, handy for trying a theme out.
-There is no other config file: everything customizable is CSS.
-
+The built-in theme is neutral monospace and follows the GTK light and
+dark preference. Put GTK CSS in `~/.config/yankout/style.css` to layer
+your own on top; `--css <file>` tries a theme without installing it.
+There is no other configuration file, everything customizable is CSS.
 [contrib/warm.css](contrib/warm.css) is a starting point. Stylable
 nodes:
 
-| selector       | what it is                        |
-|----------------|-----------------------------------|
-| `window`       | both mode windows                 |
-| `.bar`         | the filter line: `.prompt` label (`>`) and `.filter` entry |
-| `.filter placeholder` | the dim "filter" hint       |
-| `.history`     | the list view; rows are `.history row`, `.history row:selected` |
-| `.age`         | the relative-age label (`5m`, `2h`) leading each row; dimmed by default — prefer a solid muted `color` over `opacity`, which can thin digit strokes into illegibility |
-| `.empty`       | the "history empty" label         |
-| `.puck`        | the puck's single row: `.puck-kind` marker (`file`, `image/png`, …) and `.puck-detail` text |
+| selector              | what it is                                  |
+|-----------------------|---------------------------------------------|
+| `window`              | both mode windows                           |
+| `.bar`                | filter line: `.prompt` label, `.filter` entry |
+| `.filter placeholder` | the dim "filter" hint                       |
+| `.history`            | the list; rows are `.history row`, `.history row:selected` |
+| `.age`                | relative-age label on each row (prefer a muted `color` over `opacity`) |
+| `.empty`              | the "history empty" label                   |
+| `.puck`               | the puck row: `.puck-kind` marker, `.puck-detail` text |
 
 ## License
 
 Licensed under either of [Apache License, Version 2.0](LICENSE-APACHE)
 or [MIT license](LICENSE-MIT) at your option. Unless you explicitly
-state otherwise, any contribution intentionally submitted for inclusion
-in the work by you shall be dual licensed as above, without any
-additional terms or conditions.
+state otherwise, any contribution intentionally submitted for
+inclusion in the work by you shall be dual licensed as above, without
+any additional terms or conditions.

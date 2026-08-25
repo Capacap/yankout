@@ -1,6 +1,20 @@
 /* Example theme: a flat warm terminal panel, fuzzel-style. Copy to
- * ~/.config/yankout/style.css and adjust; the node reference is in
- * README.md. */
+ * ~/.config/yankout/style.css and adjust.
+ *
+ * This file doubles as the node reference. The full set of stylable
+ * nodes:
+ *
+ *   window                 both mode windows
+ *   .bar                   the filter line: .prompt label (>) and
+ *                          .filter entry; .filter placeholder is the
+ *                          dim "filter" hint
+ *   .history               the list view; rows are .history row and
+ *                          .history row:selected
+ *   .age                   relative-age label (5m, 2h) leading each row
+ *   .empty                 the "history empty" label
+ *   .puck                  the puck's single row: .puck-kind marker
+ *                          (file, image/png, ...) and .puck-detail text
+ */
 
 window {
     background-color: #1c1b19;

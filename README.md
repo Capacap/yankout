@@ -1,59 +1,69 @@
 # yankout
 
-A Wayland clipboard picker in the dmenu tradition, except entries
-leave by drag, and a copied file path leaves as a real file drop.
-Browser upload zones and chat attachment areas accept dragged files
-but not pasted paths; yankout turns the path already sitting in your
-clipboard history into the drop those targets want.
+A Wayland clipboard manager built in the dmenu tradition. A minimal
+GTK window lets you drag entries out to any destination, and a copied
+file path leaves as a real file drop. It also fills the role of a
+regular clipboard manager: search your history, recall an entry to
+the active clipboard.
 
-The window exists because Wayland demands one. A drag must start from
-a pointer gesture on a surface owned by the dragging client, so no
-daemon or terminal escape sequence can do this. yankout keeps that
-window in the launcher shape terminal users already accept: spawned by
-keybind, keyboard-driven, gone on Esc. Filter-as-you-type is in;
-browsing and curating history stays in the terminal, where `yankout
-list` pipes into fzf, fuzzel, or whatever picker you already use.
+When working in the terminal or in TUI apps like yazi and fzf,
+feeding a file into a GUI app such as a browser or editor is tedious.
+yankout lets the clipboard bridge that gap: copy the file path, open
+yankout, and drag the entry out of the window into the destination.
 
 ## Usage
 
-**`yankout`** shows recent history, newest first. Type to filter,
-arrows or Ctrl+j/k to move, Enter to recall an entry to the active
-clipboard. The whole window is the drag handle for the selected entry,
-so filter with hands on the keyboard, then grab anywhere and pull.
-Closes on Esc, focus loss, or a completed drop.
+```
+yankout              open the history window
+yankout --current    show a puck that drags the live clipboard out
+yankout list         print history as <id>TAB<preview> lines, newest first
+yankout decode [id]  write one entry's raw content to stdout
+yankout watch        record clipboard history; run once per session
 
-**`yankout --current`** skips the list and shows a postage-stamp
-window whose entire surface drags the live clipboard, which makes any
-terminal program a drag source:
+--css <file>         load CSS on top of the default theme
+--backend <name>     force the history backend (native or cliphist)
+```
+
+In the history window, type to filter, Enter or double-click to
+recall, and the whole window drags the selected entry. It closes on
+Esc, focus loss, or a completed drop. The puck survives focus loss
+and makes any terminal program a drag source:
 
 ```sh
 echo ~/report.pdf | wl-copy && yankout --current
 ```
 
-The puck survives focus loss. Spawn it, click into the target to bring
-its drop zone into view, then come back and drag; only Esc or a
-completed drop ends it.
-
-What a drag delivers is decided at drag time. Absolute paths to
-existing files (one per line) are offered as `text/uri-list` plus
+Paths to existing files are dragged as `text/uri-list` plus
 `text/plain`, so file managers and browsers take the file while text
-fields take the path string; relative and stale paths degrade to plain
-text. Binary content is offered as the type sniffed from its magic
-bytes, and everything else as plain text.
+fields take the path string. Binary content goes out under its
+sniffed type, everything else as plain text.
+
+## Installation
+
+Requires a GTK4-capable Wayland session and
+[wl-clipboard](https://github.com/bugaevc/wl-clipboard).
+
+```sh
+cargo install --path .
+```
+
+Spawn `yankout watch`, the history recorder, on session startup and
+bind `yankout` to a key. The windows are fixed-size, which niri and sway float on their
+own; compositors without that heuristic need a float rule matching
+the app-ids `dev.yankout.list` and `dev.yankout.puck`. niri examples
+are in [contrib/niri.kdl](contrib/niri.kdl).
 
 ## History
 
-`yankout watch` maintains the history. Start it once per session from
-the compositor config (`spawn-at-startup "yankout" "watch"` on niri);
-it listens on ext-data-control-v1 (or the older zwlr variant) and
-keeps entries under `$XDG_DATA_HOME/yankout/history`, newest first,
-deduplicated, capped at 750. Offers marked `x-kde-passwordManagerHint`
-are never stored. On compositors with no data-control protocol,
-[cliphist](https://github.com/sentriz/cliphist) fills in if installed;
-`--backend cliphist|native` forces the choice.
-
-The history is also readable from the terminal, in cliphist's shape so
-existing pickers switch by renaming the command:
+`yankout watch` is yankout's own clipboard watcher. It hears every
+copy directly from the compositor over the data-control protocol and
+records it under `$XDG_DATA_HOME/yankout/history`: newest first,
+deduplicated, capped at 750 entries, and offers marked
+`x-kde-passwordManagerHint` are never stored, keeping password
+managers out of history. On compositors without data-control,
+[cliphist](https://github.com/sentriz/cliphist) fills in if
+installed. The history is also readable from the terminal, in
+cliphist's shape so existing pickers switch by renaming the command:
 
 ```sh
 yankout list        # <id>TAB<preview> per line, newest first
@@ -61,40 +71,13 @@ yankout decode 42   # raw content of one entry
 yankout list | fuzzel --dmenu | yankout decode | wl-copy
 ```
 
-## Installation
-
-Requires a GTK4-capable Wayland session (the UI path uses no
-compositor-specific protocols) and
-[wl-clipboard](https://github.com/bugaevc/wl-clipboard).
-
-```sh
-cargo install --path .
-```
-
-Bind it to a key. Both windows are fixed-size, which niri and sway
-float on their own; compositors without that heuristic (Hyprland, for
-one) need a float rule matching the app-ids `dev.yankout.list` and
-`dev.yankout.puck`. Example niri binds and placement rules are in
-[contrib/niri.kdl](contrib/niri.kdl).
-
 ## Theming
 
 The built-in theme is neutral monospace and follows the GTK light and
-dark preference. Put GTK CSS in `~/.config/yankout/style.css` to layer
-your own on top; `--css <file>` tries a theme without installing it.
-There is no other configuration file, everything customizable is CSS.
-[contrib/warm.css](contrib/warm.css) is a starting point. Stylable
-nodes:
-
-| selector              | what it is                                  |
-|-----------------------|---------------------------------------------|
-| `window`              | both mode windows                           |
-| `.bar`                | filter line: `.prompt` label, `.filter` entry |
-| `.filter placeholder` | the dim "filter" hint                       |
-| `.history`            | the list; rows are `.history row`, `.history row:selected` |
-| `.age`                | relative-age label on each row (prefer a muted `color` over `opacity`) |
-| `.empty`              | the "history empty" label                   |
-| `.puck`               | the puck row: `.puck-kind` marker, `.puck-detail` text |
+dark preference. Everything customizable is GTK CSS in
+`~/.config/yankout/style.css`; `--css <file>` tries a theme without
+installing it. [contrib/warm.css](contrib/warm.css) is a commented
+starting point that lists the stylable nodes.
 
 ## License
 

@@ -12,7 +12,7 @@ yankout lets the clipboard bridge that gap: copy the file path, open
 yankout, and drag the entry out of the window into the destination.
 
 ![Filtering the history and dragging the entry into a browser drop
-zone as a file](.github/drag.gif)
+zone as a file](https://raw.githubusercontent.com/Capacap/yankout/main/.github/drag.gif)
 
 ## Usage
 
@@ -47,14 +47,14 @@ Requires a GTK4-capable Wayland session and
 [wl-clipboard](https://github.com/bugaevc/wl-clipboard).
 
 ```sh
-cargo install --path .
+cargo install yankout
 ```
 
 Spawn `yankout watch`, the history recorder, on session startup and
 bind `yankout` to a key. The windows are fixed-size, which niri and sway float on their
 own; compositors without that heuristic need a float rule matching
 the app-ids `dev.yankout.list` and `dev.yankout.puck`. niri examples
-are in [contrib/niri.kdl](contrib/niri.kdl).
+are in [contrib/niri.kdl](https://github.com/Capacap/yankout/blob/main/contrib/niri.kdl).
 
 ## History
 
@@ -79,16 +79,20 @@ yankout list | fuzzel --dmenu | yankout decode | wl-copy
 The built-in theme is neutral monospace and follows the GTK light and
 dark preference. Everything customizable is GTK CSS in
 `~/.config/yankout/style.css`; `--css <file>` tries a theme without
-installing it. [contrib/warm.css](contrib/warm.css) is a commented
+installing it.
+[contrib/warm.css](https://github.com/Capacap/yankout/blob/main/contrib/warm.css)
+is a commented
 starting point that lists the stylable nodes.
 
 ![The history window: age-tagged entries over a dark
-theme](.github/screenshot.png)
+theme](https://raw.githubusercontent.com/Capacap/yankout/main/.github/screenshot.png)
 
 ## License
 
-Licensed under either of [Apache License, Version 2.0](LICENSE-APACHE)
-or [MIT license](LICENSE-MIT) at your option. Unless you explicitly
+Licensed under either of
+[Apache License, Version 2.0](https://github.com/Capacap/yankout/blob/main/LICENSE-APACHE)
+or [MIT license](https://github.com/Capacap/yankout/blob/main/LICENSE-MIT)
+at your option. Unless you explicitly
 state otherwise, any contribution intentionally submitted for
 inclusion in the work by you shall be dual licensed as above, without
 any additional terms or conditions.

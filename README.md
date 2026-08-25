@@ -141,6 +141,7 @@ nodes:
 | `.bar`         | the filter line: `.prompt` label (`>`) and `.filter` entry |
 | `.filter placeholder` | the dim "filter" hint       |
 | `.history`     | the list view; rows are `.history row`, `.history row:selected` |
+| `.age`         | the relative-age label (`5m`, `2h`) leading each row; dimmed by default — prefer a solid muted `color` over `opacity`, which can thin digit strokes into illegibility |
 | `.empty`       | the "history empty" label         |
 | `.puck`        | the puck's single row: `.puck-kind` marker (`file`, `image/png`, …) and `.puck-detail` text |
 

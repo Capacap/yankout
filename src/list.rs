@@ -45,25 +45,48 @@ pub fn run(user_css: Option<String>, backend: Box<dyn History>) -> ExitCode {
 
 fn build_list(app: &gtk::Application, backend: Rc<dyn History>, entries: &[Entry]) {
     let (filter, selection) = model(entries);
+    // cliphist keeps no times; rather than a blank column, no column
+    let show_age = entries.iter().any(|e| e.stamp.is_some());
 
     let factory = gtk::SignalListItemFactory::new();
-    factory.connect_setup(|_, item| {
+    factory.connect_setup(move |_, item| {
         let item = item.downcast_ref::<gtk::ListItem>().unwrap();
-        let label = gtk::Label::builder()
-            .xalign(0.0)
-            .ellipsize(pango::EllipsizeMode::End)
+        let hbox = gtk::Box::builder()
+            .orientation(gtk::Orientation::Horizontal)
+            .spacing(8)
             .margin_top(6)
             .margin_bottom(6)
             .margin_start(10)
             .margin_end(10)
             .build();
-        item.set_child(Some(&label));
+        if show_age {
+            let age = gtk::Label::builder()
+                .xalign(1.0)
+                .width_chars(3)
+                .css_classes(["age"])
+                .build();
+            hbox.append(&age);
+        }
+        let preview = gtk::Label::builder()
+            .xalign(0.0)
+            .ellipsize(pango::EllipsizeMode::End)
+            .hexpand(true)
+            .build();
+        hbox.append(&preview);
+        item.set_child(Some(&hbox));
     });
-    factory.connect_bind(|_, item| {
+    factory.connect_bind(move |_, item| {
         let item = item.downcast_ref::<gtk::ListItem>().unwrap();
         let row = item.item().and_downcast::<Row>().unwrap();
-        let label = item.child().and_downcast::<gtk::Label>().unwrap();
-        label.set_text(&row.preview());
+        let hbox = item.child().and_downcast::<gtk::Box>().unwrap();
+        let mut child = hbox.first_child();
+        if show_age {
+            let age = child.and_downcast::<gtk::Label>().unwrap();
+            age.set_text(&row.age());
+            child = age.next_sibling();
+        }
+        let preview = child.and_downcast::<gtk::Label>().unwrap();
+        preview.set_text(&row.preview());
     });
 
     // No single_click_activate: its select-on-hover would let the pointer
@@ -124,8 +147,8 @@ fn build_list(app: &gtk::Application, backend: Rc<dyn History>, entries: &[Entry
         let selection = selection.clone();
         let backend = backend.clone();
         move |_, _, _| {
-            let entry = selected_entry(&selection)?;
-            match backend.content(&entry.id) {
+            let id = selected_id(&selection)?;
+            match backend.content(&id) {
                 Ok(content) => Some(provider::content_provider(&payload::classify(&content))),
                 Err(e) => {
                     eprintln!("yankout: {e}");
@@ -199,8 +222,8 @@ fn build_list(app: &gtk::Application, backend: Rc<dyn History>, entries: &[Entry
             {
                 move_selection(&selection, &list, -1);
             } else if keyval == gdk::Key::Return || keyval == gdk::Key::KP_Enter {
-                if let Some(entry) = selected_entry(&selection) {
-                    recall(backend.as_ref(), &entry, &win);
+                if let Some(id) = selected_id(&selection) {
+                    recall(backend.as_ref(), &id, &win);
                 }
             } else if !has_entries || search.has_focus() {
                 return glib::Propagation::Proceed;
@@ -235,7 +258,7 @@ fn build_list(app: &gtk::Application, backend: Rc<dyn History>, entries: &[Entry
         let selection = selection.clone();
         move |_, pos| {
             if let Some(row) = selection.item(pos).and_downcast::<Row>() {
-                recall(backend.as_ref(), &row.entry(), &win);
+                recall(backend.as_ref(), &row.id(), &win);
             }
         }
     });
@@ -248,7 +271,11 @@ fn build_list(app: &gtk::Application, backend: Rc<dyn History>, entries: &[Entry
 
 /// Rows behind a case-insensitive substring filter on the preview.
 fn model(entries: &[Entry]) -> (gtk::StringFilter, gtk::SingleSelection) {
-    let store = entries.iter().map(Row::new).collect::<gio::ListStore>();
+    let now = std::time::SystemTime::now();
+    let store = entries
+        .iter()
+        .map(|e| Row::new(e, now))
+        .collect::<gio::ListStore>();
     let filter = gtk::StringFilter::builder()
         .expression(Row::this_expression("preview"))
         .match_mode(gtk::StringFilterMatchMode::Substring)
@@ -258,8 +285,8 @@ fn model(entries: &[Entry]) -> (gtk::StringFilter, gtk::SingleSelection) {
     (filter, gtk::SingleSelection::new(Some(filtered)))
 }
 
-fn selected_entry(selection: &gtk::SingleSelection) -> Option<Entry> {
-    Some(selection.selected_item().and_downcast::<Row>()?.entry())
+fn selected_id(selection: &gtk::SingleSelection) -> Option<String> {
+    Some(selection.selected_item().and_downcast::<Row>()?.id())
 }
 
 fn move_selection(selection: &gtk::SingleSelection, list: &gtk::ListView, delta: i32) {
@@ -278,9 +305,9 @@ fn move_selection(selection: &gtk::SingleSelection, list: &gtk::ListView, delta:
 
 /// The recall verb: promote the entry back to the active clipboard. Only
 /// success closes the window; a failure is worth leaving it up for.
-fn recall(backend: &dyn History, entry: &Entry, window: &gtk::ApplicationWindow) {
+fn recall(backend: &dyn History, id: &str, window: &gtk::ApplicationWindow) {
     match backend
-        .content(&entry.id)
+        .content(id)
         .and_then(|content| clipboard::write(&content))
     {
         Ok(()) => window.close(),
@@ -296,6 +323,7 @@ mod tests {
         Entry {
             id: id.into(),
             preview: preview.into(),
+            stamp: None,
         }
     }
 
@@ -315,13 +343,13 @@ mod tests {
         assert_eq!(selection.n_items(), 3);
         filter.set_search(Some("HELLO"));
         assert_eq!(selection.n_items(), 2);
-        assert_eq!(selected_entry(&selection).unwrap().id, "1");
+        assert_eq!(selected_id(&selection).unwrap(), "1");
         filter.set_search(Some("build"));
         assert_eq!(selection.n_items(), 1);
-        assert_eq!(selected_entry(&selection).unwrap().id, "2");
+        assert_eq!(selected_id(&selection).unwrap(), "2");
         filter.set_search(Some("zzz"));
         assert_eq!(selection.n_items(), 0);
-        assert_eq!(selected_entry(&selection), None);
+        assert_eq!(selected_id(&selection), None);
         filter.set_search(None);
         assert_eq!(selection.n_items(), 3);
     }

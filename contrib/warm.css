@@ -30,6 +30,17 @@ window {
     color: #1c1b19;
 }
 
+/* Solid muted color, not opacity: alpha-dimming can thin digit
+ * strokes (the 7's top bar) into illegibility. */
+.age {
+    color: #918175;
+    opacity: 1;
+}
+
+.history row:selected .age {
+    color: #1c1b19;
+}
+
 .empty {
     color: #c4b8a0;
 }

@@ -12,6 +12,11 @@
     opacity: 0.55;
 }
 
+/* Relative-age prefix on history rows */
+.age {
+    opacity: 0.55;
+}
+
 /* The filter is a bare prompt line, not a boxed field: same padding as
  * the rows, no border, no focus ring. */
 .bar {

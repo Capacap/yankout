@@ -7,6 +7,7 @@
 
 use std::path::PathBuf;
 use std::process::Command;
+use std::time::SystemTime;
 
 use crate::Error;
 use crate::payload::human_size;
@@ -15,6 +16,9 @@ use crate::payload::human_size;
 pub struct Entry {
     pub id: String,
     pub preview: String,
+    /// When the content last became the clipboard; `None` for backends
+    /// that keep no times (cliphist).
+    pub stamp: Option<SystemTime>,
 }
 
 pub trait History {
@@ -112,6 +116,7 @@ fn parse_list(stdout: &str) -> Vec<Entry> {
             Some(Entry {
                 id: id.to_string(),
                 preview: preview.to_string(),
+                stamp: None,
             })
         })
         .collect()
@@ -172,10 +177,11 @@ impl History for Native {
             .filter_map(|seq| {
                 // a read failure here means the watcher evicted the
                 // entry between list and read — it is gone, not an error
-                let (prefix, total) = self.store.read_prefix(seq, PREVIEW_BYTES).ok()?;
+                let (prefix, total, stamp) = self.store.read_prefix(seq, PREVIEW_BYTES).ok()?;
                 Some(Entry {
                     id: seq.to_string(),
                     preview: preview(&prefix, total),
+                    stamp,
                 })
             })
             .collect())
@@ -189,7 +195,10 @@ impl History for Native {
 
 fn preview(prefix: &[u8], total: u64) -> String {
     if let Some(mime) = crate::payload::sniff_image(prefix) {
-        return format!("[[ {mime} {} ]]", human_size(total));
+        return match crate::payload::image_dimensions(prefix) {
+            Some((w, h)) => format!("[[ {mime} {w}×{h} {} ]]", human_size(total)),
+            None => format!("[[ {mime} {} ]]", human_size(total)),
+        };
     }
     if crate::payload::prefix_looks_binary(prefix) {
         return format!("[[ binary {} ]]", human_size(total));
@@ -235,11 +244,13 @@ mod tests {
             vec![
                 Entry {
                     id: "42".into(),
-                    preview: "hello world".into()
+                    preview: "hello world".into(),
+                    stamp: None,
                 },
                 Entry {
                     id: "41".into(),
-                    preview: "/some/path.txt".into()
+                    preview: "/some/path.txt".into(),
+                    stamp: None,
                 },
             ]
         );
@@ -273,10 +284,28 @@ mod tests {
         assert_eq!(entries.len(), 2);
         assert_eq!(entries[0].preview, "[[ image/png 2 KiB ]]");
         assert_eq!(entries[1].preview, "copied text second line");
+        assert!(entries.iter().all(|e| e.stamp.is_some()));
         assert_eq!(
             native.content(&entries[1].id).unwrap(),
             b"copied  text\nsecond line"
         );
+    }
+
+    #[test]
+    fn image_previews_carry_dimensions_when_the_header_has_them() {
+        let dir = tempfile::tempdir().unwrap();
+        {
+            let mut png = vec![0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
+            png.extend_from_slice(&13u32.to_be_bytes());
+            png.extend_from_slice(b"IHDR");
+            png.extend_from_slice(&2560u32.to_be_bytes());
+            png.extend_from_slice(&1440u32.to_be_bytes());
+            png.resize(3 * 1024 / 2, 0);
+            let mut w = crate::store::Writer::open(dir.path(), 10).unwrap();
+            w.store(&png).unwrap();
+        }
+        let entries = Native::new(dir.path()).entries().unwrap();
+        assert_eq!(entries[0].preview, "[[ image/png 2560×1440 1 KiB ]]");
     }
 
     #[test]
@@ -307,6 +336,7 @@ mod tests {
             Entry {
                 id: "1".into(),
                 preview: "x".into(),
+                stamp: None,
             },
             b"content".to_vec(),
         )]);

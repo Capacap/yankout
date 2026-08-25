@@ -13,6 +13,7 @@ use std::collections::{BTreeMap, HashMap, hash_map::DefaultHasher};
 use std::fs::{self, File};
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
+use std::time::SystemTime;
 
 use rustix::fs::FlockOperation;
 
@@ -94,20 +95,26 @@ impl Store {
         fs::read(self.path(seq)).map_err(Error::io(format!("reading entry {seq}")))
     }
 
-    /// First `limit` bytes plus the entry's total size — enough for a
-    /// preview without pulling a multi-megabyte image into memory.
-    pub fn read_prefix(&self, seq: u64, limit: usize) -> Result<(Vec<u8>, u64), Error> {
+    /// First `limit` bytes plus the entry's total size and mtime —
+    /// enough for a preview without pulling a multi-megabyte image into
+    /// memory. The mtime is when the entry last became the clipboard:
+    /// writes stamp it and dedup bumps refresh it.
+    pub fn read_prefix(
+        &self,
+        seq: u64,
+        limit: usize,
+    ) -> Result<(Vec<u8>, u64, Option<SystemTime>), Error> {
         use std::io::Read;
         let mut file =
             File::open(self.path(seq)).map_err(Error::io(format!("reading entry {seq}")))?;
-        let total = file
+        let meta = file
             .metadata()
-            .map_err(Error::io(format!("reading entry {seq}")))?
-            .len();
+            .map_err(Error::io(format!("reading entry {seq}")))?;
+        let total = meta.len();
         let mut prefix = vec![0; limit.min(total as usize)];
         file.read_exact(&mut prefix)
             .map_err(Error::io(format!("reading entry {seq}")))?;
-        Ok((prefix, total))
+        Ok((prefix, total, meta.modified().ok()))
     }
 
     fn path(&self, seq: u64) -> PathBuf {
@@ -196,6 +203,15 @@ impl Writer {
             if matches {
                 let seq = self.take_seq();
                 if fs::rename(self.store.path(old_seq), self.store.path(seq)).is_ok() {
+                    // rename preserves mtime, but the bump means this
+                    // content just hit the clipboard again; best-effort,
+                    // a stale age is not worth failing the store over
+                    let _ = File::options()
+                        .append(true)
+                        .open(self.store.path(seq))
+                        .and_then(|f| {
+                            f.set_times(fs::FileTimes::new().set_modified(SystemTime::now()))
+                        });
                     self.by_seq.remove(&old_seq);
                     self.by_seq.insert(seq, key);
                     self.by_key.insert(key, seq);
@@ -275,6 +291,34 @@ mod tests {
         assert_eq!(store.read(2).unwrap(), b"payload");
         // same inode: the data was moved, not rewritten
         assert_eq!(fs::metadata(store.path(2)).unwrap().ino(), inode_before);
+    }
+
+    #[test]
+    fn bump_refreshes_mtime_but_unchanged_does_not() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut w = writer(dir.path());
+        w.store(b"payload").unwrap();
+        w.store(b"other").unwrap();
+        let store = Store::open(dir.path());
+        let old = SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_000_000);
+        let backdate = |seq| {
+            File::options()
+                .append(true)
+                .open(store.path(seq))
+                .unwrap()
+                .set_times(fs::FileTimes::new().set_modified(old))
+                .unwrap();
+        };
+
+        backdate(0);
+        assert_eq!(w.store(b"payload").unwrap(), Stored::Bumped(2));
+        let (_, _, modified) = store.read_prefix(2, 4).unwrap();
+        assert!(modified.unwrap() > old, "bump should read as a fresh copy");
+
+        backdate(2);
+        assert_eq!(w.store(b"payload").unwrap(), Stored::Unchanged(2));
+        let (_, _, modified) = store.read_prefix(2, 4).unwrap();
+        assert_eq!(modified.unwrap(), old, "a re-announce must not touch");
     }
 
     #[test]

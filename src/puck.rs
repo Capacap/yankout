@@ -129,7 +129,15 @@ fn detail_text(payload: &Payload) -> String {
             truncate(text.lines().next().unwrap_or(""), 36)
         }
         Kind::Image(_) | Kind::Binary => {
-            payload::human_size(payload.formats.first().map_or(0, |(_, b)| b.len() as u64))
+            let bytes = payload
+                .formats
+                .first()
+                .map_or(&[][..], |(_, b)| b.as_slice());
+            let size = payload::human_size(bytes.len() as u64);
+            match payload::image_dimensions(bytes) {
+                Some((w, h)) => format!("{w}×{h} {size}"),
+                None => size,
+            }
         }
     }
 }

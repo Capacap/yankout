@@ -134,6 +134,97 @@ pub fn human_size(bytes: u64) -> String {
     }
 }
 
+/// Pixel dimensions from an image header. Works on the same short
+/// prefix previews are built from: PNG, GIF and WebP keep them at fixed
+/// offsets, JPEG behind variable-length segments (EXIF can push the
+/// frame header past any prefix), so a large JPEG header yields `None`
+/// rather than more I/O.
+pub fn image_dimensions(bytes: &[u8]) -> Option<(u32, u32)> {
+    match sniff_image(bytes)? {
+        "image/png" => png_dimensions(bytes),
+        "image/gif" => gif_dimensions(bytes),
+        "image/webp" => webp_dimensions(bytes),
+        "image/jpeg" => jpeg_dimensions(bytes),
+        _ => None,
+    }
+}
+
+fn be16(b: &[u8]) -> Option<u32> {
+    Some(u16::from_be_bytes(b.get(..2)?.try_into().ok()?) as u32)
+}
+
+fn le16(b: &[u8]) -> Option<u32> {
+    Some(u16::from_le_bytes(b.get(..2)?.try_into().ok()?) as u32)
+}
+
+fn be32(b: &[u8]) -> Option<u32> {
+    Some(u32::from_be_bytes(b.get(..4)?.try_into().ok()?))
+}
+
+fn le24(b: &[u8]) -> Option<u32> {
+    let b = b.get(..3)?;
+    Some(b[0] as u32 | (b[1] as u32) << 8 | (b[2] as u32) << 16)
+}
+
+fn png_dimensions(b: &[u8]) -> Option<(u32, u32)> {
+    // IHDR is required to be the first chunk
+    (b.get(12..16)? == b"IHDR").then_some(())?;
+    Some((be32(b.get(16..)?)?, be32(b.get(20..)?)?))
+}
+
+fn gif_dimensions(b: &[u8]) -> Option<(u32, u32)> {
+    Some((le16(b.get(6..)?)?, le16(b.get(8..)?)?))
+}
+
+fn webp_dimensions(b: &[u8]) -> Option<(u32, u32)> {
+    let payload = b.get(20..)?;
+    match b.get(12..16)? {
+        // extended: canvas size minus one, 24-bit little-endian
+        b"VP8X" => Some((1 + le24(payload.get(4..)?)?, 1 + le24(payload.get(7..)?)?)),
+        b"VP8 " => {
+            // lossy: dimensions follow the frame tag and sync code
+            (payload.get(3..6)? == [0x9D, 0x01, 0x2A]).then_some(())?;
+            Some((
+                le16(payload.get(6..)?)? & 0x3FFF,
+                le16(payload.get(8..)?)? & 0x3FFF,
+            ))
+        }
+        b"VP8L" => {
+            // lossless: signature byte, then 14 bits each of size minus one
+            (*payload.first()? == 0x2F).then_some(())?;
+            let b = payload.get(1..5)?;
+            let (b1, b2, b3, b4) = (b[0] as u32, b[1] as u32, b[2] as u32, b[3] as u32);
+            Some((
+                1 + (b1 | (b2 & 0x3F) << 8),
+                1 + (b2 >> 6 | b3 << 2 | (b4 & 0x0F) << 10),
+            ))
+        }
+        _ => None,
+    }
+}
+
+fn jpeg_dimensions(b: &[u8]) -> Option<(u32, u32)> {
+    let mut i = 2; // past SOI
+    loop {
+        if *b.get(i)? != 0xFF {
+            return None;
+        }
+        while *b.get(i)? == 0xFF {
+            i += 1;
+        }
+        let marker = *b.get(i)?;
+        i += 1;
+        // SOF0–SOF15 carry the frame size; C4/C8/CC in that range do not
+        if (0xC0..=0xCF).contains(&marker) && !matches!(marker, 0xC4 | 0xC8 | 0xCC) {
+            return Some((be16(b.get(i + 5..)?)?, be16(b.get(i + 3..)?)?));
+        }
+        if matches!(marker, 0x01 | 0xD0..=0xD9) {
+            continue; // standalone marker, no length field
+        }
+        i += be16(b.get(i..)?)? as usize;
+    }
+}
+
 pub(crate) fn sniff_image(bytes: &[u8]) -> Option<&'static str> {
     if bytes.starts_with(&[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A]) {
         Some("image/png")
@@ -320,6 +411,86 @@ mod tests {
         let entry = format!("{}\r\n{}\r\n", a.display(), b.display());
         let p = classify_with_home(entry.as_bytes(), None);
         assert_eq!(p.kind, Kind::Files(2));
+    }
+
+    fn png_header(w: u32, h: u32) -> Vec<u8> {
+        let mut b = vec![0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
+        b.extend_from_slice(&13u32.to_be_bytes());
+        b.extend_from_slice(b"IHDR");
+        b.extend_from_slice(&w.to_be_bytes());
+        b.extend_from_slice(&h.to_be_bytes());
+        b
+    }
+
+    #[test]
+    fn png_dimensions_come_from_ihdr() {
+        assert_eq!(
+            image_dimensions(&png_header(2560, 1440)),
+            Some((2560, 1440))
+        );
+        // signature without a real IHDR: still an image, no dimensions
+        let bare = [0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 0];
+        assert_eq!(image_dimensions(&bare), None);
+    }
+
+    #[test]
+    fn gif_dimensions_come_from_the_screen_descriptor() {
+        let mut b = b"GIF89a".to_vec();
+        b.extend_from_slice(&640u16.to_le_bytes());
+        b.extend_from_slice(&480u16.to_le_bytes());
+        assert_eq!(image_dimensions(&b), Some((640, 480)));
+        assert_eq!(image_dimensions(b"GIF89a"), None);
+    }
+
+    fn webp(chunk: &[u8; 4], payload: &[u8]) -> Vec<u8> {
+        let mut b = b"RIFF\0\0\0\0WEBP".to_vec();
+        b.extend_from_slice(chunk);
+        b.extend_from_slice(&(payload.len() as u32).to_le_bytes());
+        b.extend_from_slice(payload);
+        b
+    }
+
+    #[test]
+    fn webp_dimensions_cover_all_three_layouts() {
+        // VP8X: canvas 1920x1080 as size-minus-one, 24-bit LE
+        let mut p = vec![0, 0, 0, 0];
+        p.extend_from_slice(&[0x7F, 0x07, 0x00]); // 1919
+        p.extend_from_slice(&[0x37, 0x04, 0x00]); // 1079
+        assert_eq!(image_dimensions(&webp(b"VP8X", &p)), Some((1920, 1080)));
+
+        // VP8: frame tag, sync code, then u16 dims with scaling bits masked
+        let mut p = vec![0, 0, 0, 0x9D, 0x01, 0x2A];
+        p.extend_from_slice(&800u16.to_le_bytes());
+        p.extend_from_slice(&600u16.to_le_bytes());
+        assert_eq!(image_dimensions(&webp(b"VP8 ", &p)), Some((800, 600)));
+
+        // VP8L: signature byte then 14+14 bits of size-minus-one
+        let (w, h) = (1023u32, 17u32);
+        let bits = (w - 1) | (h - 1) << 14;
+        let mut p = vec![0x2F];
+        p.extend_from_slice(&bits.to_le_bytes());
+        assert_eq!(image_dimensions(&webp(b"VP8L", &p)), Some((w, h)));
+    }
+
+    #[test]
+    fn jpeg_dimensions_survive_leading_segments() {
+        // SOI, an APP0 to skip, then SOF0 with height before width
+        let mut b = vec![0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x04, 0, 0];
+        b.extend_from_slice(&[0xFF, 0xC0, 0x00, 0x11, 0x08]);
+        b.extend_from_slice(&1080u16.to_be_bytes());
+        b.extend_from_slice(&1920u16.to_be_bytes());
+        assert_eq!(image_dimensions(&b), Some((1920, 1080)));
+        // a header cut before the frame segment yields nothing
+        assert_eq!(
+            image_dimensions(&[0xFF, 0xD8, 0xFF, 0xE0, 0x40, 0x00]),
+            None
+        );
+    }
+
+    #[test]
+    fn non_images_have_no_dimensions() {
+        assert_eq!(image_dimensions(b"just text"), None);
+        assert_eq!(image_dimensions(&[]), None);
     }
 
     #[test]

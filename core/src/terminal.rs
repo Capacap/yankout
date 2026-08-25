@@ -72,6 +72,7 @@ mod tests {
                 Entry {
                     id: "7".into(),
                     preview: "[[ image/png 2 KiB ]]".into(),
+                    stamp: None,
                 },
                 b"\x89PNG".to_vec(),
             ),
@@ -79,6 +80,7 @@ mod tests {
                 Entry {
                     id: "3".into(),
                     preview: "hello world".into(),
+                    stamp: None,
                 },
                 b"hello world\n".to_vec(),
             ),

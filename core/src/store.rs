@@ -12,7 +12,7 @@
 use std::collections::{BTreeMap, HashMap, hash_map::DefaultHasher};
 use std::fs::{self, File};
 use std::hash::{Hash, Hasher};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::time::SystemTime;
 
 use rustix::fs::FlockOperation;
@@ -30,26 +30,6 @@ pub fn default_dir() -> Result<PathBuf, Error> {
         .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/share")))
         .ok_or(Error::NoDataDir)?;
     Ok(base.join("yankout/history"))
-}
-
-/// Whether a `Writer` currently holds the store's lock. This is the
-/// signal list mode uses to prefer the native backend: history is only
-/// trustworthy while something is feeding it.
-///
-/// The probe takes a shared lock: it conflicts with the writer's
-/// exclusive one (so detection works) but not with a writer opening at
-/// the same instant, which an exclusive probe would knock out.
-pub fn watcher_active(dir: &Path) -> bool {
-    let Ok(file) = File::open(dir.join(LOCK_FILE)) else {
-        return false;
-    };
-    match rustix::fs::flock(&file, FlockOperation::NonBlockingLockShared) {
-        Ok(()) => {
-            let _ = rustix::fs::flock(&file, FlockOperation::Unlock);
-            false
-        }
-        Err(_) => true,
-    }
 }
 
 pub struct Store {
@@ -260,6 +240,7 @@ impl Writer {
 mod tests {
     use super::*;
     use std::os::unix::fs::{MetadataExt, PermissionsExt};
+    use std::path::Path;
 
     fn writer(dir: &Path) -> Writer {
         Writer::open(dir, DEFAULT_CAP).unwrap()
@@ -406,17 +387,6 @@ mod tests {
         assert!(Writer::open(dir.path(), DEFAULT_CAP).is_err());
         rustix::fs::flock(&file, FlockOperation::Unlock).unwrap();
         assert!(Writer::open(dir.path(), DEFAULT_CAP).is_ok());
-    }
-
-    #[test]
-    fn watcher_active_tracks_lock_lifetime() {
-        let dir = tempfile::tempdir().unwrap();
-        assert!(!watcher_active(dir.path()));
-        {
-            let _w = writer(dir.path());
-            assert!(watcher_active(dir.path()));
-        }
-        assert!(!watcher_active(dir.path()));
     }
 
     #[test]

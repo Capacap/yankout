@@ -32,8 +32,8 @@ struct Cli {
     #[arg(long, value_name = "FILE")]
     css: Option<PathBuf>,
 
-    /// History backend; the default picks native while a watcher is
-    /// running, else cliphist if installed
+    /// History backend; the default is native once its store exists,
+    /// else cliphist if installed
     #[arg(long, value_enum)]
     backend: Option<BackendArg>,
 }
@@ -42,7 +42,7 @@ struct Cli {
 enum Verb {
     /// Print history as <id>TAB<preview> lines, newest first
     List {
-        /// History backend (default: native while a watcher runs, else cliphist)
+        /// History backend (default: native once its store exists, else cliphist)
         #[arg(long, value_enum)]
         backend: Option<BackendArg>,
     },
@@ -53,7 +53,7 @@ enum Verb {
     Decode {
         /// Entry id as printed by `list`; read from stdin when omitted
         id: Option<String>,
-        /// History backend (default: native while a watcher runs, else cliphist)
+        /// History backend (default: native once its store exists, else cliphist)
         #[arg(long, value_enum)]
         backend: Option<BackendArg>,
     },

@@ -74,11 +74,12 @@ stay out of history. Start it from the compositor config; on niri:
 spawn-at-startup "yankout" "watch"
 ```
 
-While a watcher is running, list mode reads this history. Otherwise it
-falls back to [cliphist](https://github.com/sentriz/cliphist) if that
-is installed, which also covers compositors that offer no data-control
-protocol at all; without cliphist it reads the native history as it
-stands. `--backend cliphist|native` forces the choice.
+Once the store exists, list mode reads it — with the watcher stopped
+the history simply stops advancing, and the entry ages show it.
+[cliphist](https://github.com/sentriz/cliphist), if installed, is used
+only where the store has never been written, which covers compositors
+that offer no data-control protocol at all. `--backend cliphist|native`
+forces the choice.
 
 The history is also readable from the terminal, in cliphist's shape so
 existing pickers switch by renaming the command:

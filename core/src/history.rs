@@ -124,9 +124,10 @@ fn parse_list(stdout: &str) -> Vec<Entry> {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Backend {
-    /// Native while a watcher is feeding the store; otherwise cliphist
-    /// when it is installed, since unattended native history goes stale;
-    /// otherwise native anyway, because stale history beats none.
+    /// Native whenever the store directory exists — once a watcher has
+    /// written it, that history is the real one, and if the watcher is
+    /// down a visibly stopped history is the signal, not a reason to
+    /// switch. Cliphist only where the store has never been written.
     Auto,
     Cliphist,
     Native,
@@ -140,9 +141,10 @@ pub fn select(choice: Backend) -> Result<Box<dyn History>, Error> {
             // no resolvable data dir (no HOME) is not fatal: cliphist may
             // still work
             let dir = crate::store::default_dir().ok();
-            let live = dir.as_deref().is_some_and(crate::store::watcher_active);
             match dir {
-                Some(dir) if live || !Cliphist::installed() => Ok(Box::new(Native::new(dir))),
+                Some(dir) if dir.is_dir() || !Cliphist::installed() => {
+                    Ok(Box::new(Native::new(dir)))
+                }
                 _ => Ok(Box::new(Cliphist::new())),
             }
         }
